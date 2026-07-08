@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Client Intake Form — Noor Therapy Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form-styles.css"/>
+<link rel="stylesheet" href="fillable.css"/>
+<style>
+  body { margin: 0; }
+</style>
+<script src="theme-boot.js"></script>
+</head>
+<body>
+
+<doc-page size="letter" margin="0.55in">
+
+  <div slot="footer" class="form-footer">
+    <span>Noor Therapy Center · Client Intake Form</span>
+    <span class="dots">
+      <span style="background:#2aa63a"></span>
+      <span style="background:#f18a2c"></span>
+      <span style="background:#2f6fd6"></span>
+      <span style="background:#9b51c7"></span>
+      <span style="background:#e5396a"></span>
+    </span>
+    <span>Confidential · Protected Health Information</span>
+  </div>
+
+  <!-- Masthead -->
+  <div class="form-masthead">
+    <img class="logo" src="noor-logo.png" alt="Noor Therapy Center"/>
+    <div class="form-meta">
+      <strong>Noor Therapy Center</strong><br/>
+      6250 Excelsior Blvd, Suite 102<br/>
+      St. Louis Park, MN 55416<br/>
+      (612) 703-9022 · Fax (612) 482-3186<br/>
+      info@noortherapycenter.com
+    </div>
+  </div>
+
+  <div class="form-title">
+    <div class="kicker">New Client Intake</div>
+    <h1>Client Intake Form</h1>
+    <p class="lede">Welcome to Noor Therapy Center. This information helps us verify benefits, schedule an assessment, and match your child with the right team. Please complete every section — all information is kept strictly confidential.</p>
+  </div>
+
+  <!-- 1. Child Information -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-num">1</span>
+      <h2>Child / Client Information</h2>
+    </div>
+    <div class="grid c3">
+      <div class="field">
+        <label>Child's First Name <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Middle</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Last Name <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c4">
+      <div class="field">
+        <label>Date of Birth <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Sex</label>
+        <div class="line"></div>
+      </div>
+      <div class="field col-2">
+        <label>Preferred Name / Pronouns</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c3">
+      <div class="field col-2">
+        <label>Home Address</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Primary Language at Home</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c4">
+      <div class="field col-2">
+        <label>City</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>State</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>ZIP</label>
+        <div class="line"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Parent / Guardian -->
+  <div class="section c-orange">
+    <div class="section-head">
+      <span class="section-num">2</span>
+      <h2>Parent / Guardian Information</h2>
+    </div>
+    <div class="grid c3">
+      <div class="field">
+        <label>Full Name <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Relationship to Child</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Mobile Phone <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c3">
+      <div class="field">
+        <label>Email <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Preferred Contact Method</label>
+        <div class="checks" style="height:20px;align-items:center">
+          <span class="check"><span class="box"></span>Call</span>
+          <span class="check"><span class="box"></span>Text</span>
+          <span class="check"><span class="box"></span>Email</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Best Time to Reach You</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Second Parent / Guardian Name</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <div class="line"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. Insurance -->
+  <div class="section c-blue">
+    <div class="section-head">
+      <span class="section-num">3</span>
+      <h2>Insurance Information</h2>
+      <span class="sub">Please attach a copy of the card</span>
+    </div>
+    <div class="grid c3">
+      <div class="field col-2">
+        <label>Insurance Provider <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Plan Type</label>
+        <div class="checks" style="height:20px;align-items:center">
+          <span class="check"><span class="box"></span>Medicaid</span>
+          <span class="check"><span class="box"></span>Private</span>
+        </div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c3">
+      <div class="field">
+        <label>Member / Subscriber ID <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Group #</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Policyholder Name</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="callout blue">
+      <strong>Noor accepts Minnesota Medicaid</strong> and is credentialing with Blue Cross Blue Shield of MN, HealthPartners, Medica, and Hennepin Health. We will verify your benefits before services begin — there is no cost to you for verification.
+    </div>
+  </div>
+
+  <!-- 4. Referral & Diagnosis -->
+  <div class="section c-purple">
+    <div class="section-head">
+      <span class="section-num">4</span>
+      <h2>Diagnosis &amp; Referral</h2>
+    </div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Does your child have an autism (ASD) diagnosis?</label>
+        <div class="checks" style="height:20px;align-items:center">
+          <span class="check"><span class="box"></span>Yes</span>
+          <span class="check"><span class="box"></span>No</span>
+          <span class="check"><span class="box"></span>In process</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Date of Diagnosis</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Diagnosing Provider / Clinic</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Referring Physician (if any)</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:13px"></div>
+    <div class="field col-all">
+      <label>Other diagnoses, allergies, or medical conditions we should know about</label>
+      <div class="writein h3"></div>
+    </div>
+  </div>
+
+  <!-- 5. Current Services & Concerns -->
+  <div class="section c-berry">
+    <div class="section-head">
+      <span class="section-num">5</span>
+      <h2>Current Services &amp; Primary Concerns</h2>
+    </div>
+    <div class="field col-all" style="margin-bottom:13px">
+      <label>Services your child currently receives</label>
+      <div class="checks" style="height:20px;align-items:center">
+        <span class="check"><span class="box"></span>ABA</span>
+        <span class="check"><span class="box"></span>Speech</span>
+        <span class="check"><span class="box"></span>Occupational</span>
+        <span class="check"><span class="box"></span>Physical</span>
+        <span class="check"><span class="box"></span>School IEP</span>
+        <span class="check"><span class="box"></span>None</span>
+      </div>
+    </div>
+    <div class="field col-all">
+      <label>What are your top goals and concerns for your child? What would success look like for your family?</label>
+      <div class="writein h4"></div>
+    </div>
+  </div>
+
+  <!-- 6. Scheduling preferences -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-num">6</span>
+      <h2>Service &amp; Scheduling Preferences</h2>
+    </div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Preferred Setting</label>
+        <div class="checks" style="height:20px;align-items:center">
+          <span class="check"><span class="box"></span>In-home</span>
+          <span class="check"><span class="box"></span>Center-based</span>
+          <span class="check"><span class="box"></span>Either</span>
+        </div>
+      </div>
+      <div class="field">
+        <label>Preferred Days / Times</label>
+        <div class="line"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. Consent -->
+  <div class="section c-orange">
+    <div class="section-head">
+      <span class="section-num">7</span>
+      <h2>Consent &amp; Acknowledgment</h2>
+    </div>
+    <p class="fineprint" style="margin:0 0 10px">
+      I certify that the information above is accurate to the best of my knowledge. I authorize Noor Therapy Center to verify insurance benefits and to coordinate care with my child's physician and other providers as needed. I understand that a Notice of Privacy Practices (HIPAA) will be provided to me, and that my child's protected health information will be handled confidentially. Completing this form does not by itself begin services; care starts once benefits are verified and a treatment plan is signed.
+    </p>
+    <div class="sign-row">
+      <div class="sign-field">
+        <div class="sig-line"></div>
+        <label>Parent / Guardian Signature</label>
+      </div>
+      <div class="sign-field">
+        <div class="sig-line"></div>
+        <label>Date</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="office-use">
+    <div class="ou-label">For Office Use Only</div>
+    <div class="grid c4">
+      <div class="field"><label>Received By</label><div class="line"></div></div>
+      <div class="field"><label>Benefits Verified</label><div class="line"></div></div>
+      <div class="field"><label>Assessment Date</label><div class="line"></div></div>
+      <div class="field"><label>Assigned BCBA</label><div class="line"></div></div>
+    </div>
+  </div>
+
+</doc-page>
+
+<script src="doc-page.js"></script>
+<script src="fillable.js"></script>
+<script src="submit.js"></script>
+</body>
+</html>

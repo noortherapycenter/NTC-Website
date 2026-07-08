@@ -1,0 +1,525 @@
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&display=swap');
+
+/* ============================================================
+   Noor Therapy Center — fillable-mode layer
+   Loaded AFTER form-styles.css. Turns the printable forms into
+   type-on-screen forms with a Computer / Phone layout, on-screen
+   zoom, and sharing. EVERY on-screen affordance here is scoped to
+   @media screen, so the printed / downloaded PDF always uses the
+   original fixed Letter layout — no matter how the form was filled.
+   ============================================================ */
+
+/* ---- Editable single-line fields ---- */
+.field .line,
+.sign-field .sig-line,
+.boxfield,
+.blank,
+.charboxes .cb {
+  outline: none;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: 12px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+/* Neutralize iOS/Safari auto-detection of dates, phone numbers and
+   addresses (it was rendering typed values like Date of Birth in a
+   different color/size). Force detected spans to inherit the field. */
+.field .line a[x-apple-data-detectors],
+.writein a[x-apple-data-detectors],
+.boxfield a[x-apple-data-detectors],
+table.form-table td a[x-apple-data-detectors],
+a[x-apple-data-detectors] {
+  color: inherit !important;
+  font-size: inherit !important;
+  font-family: inherit !important;
+  font-weight: inherit !important;
+  text-decoration: none !important;
+  -webkit-text-size-adjust: 100% !important;
+}
+
+/* ---- Typed signatures render in cursive ---- */
+.is-signature[contenteditable] {
+  font-family: 'Dancing Script', 'Segoe Script', 'Snell Roundhand', cursive;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 28px;
+}
+table.form-table td.is-signature[contenteditable] {
+  font-family: 'Dancing Script', 'Segoe Script', 'Snell Roundhand', cursive;
+  font-size: 16px;
+}
+.field .line[contenteditable],
+.sign-field .sig-line[contenteditable],
+.blank[contenteditable] {
+  line-height: 18px;
+  padding: 0 3px 1px;
+  white-space: nowrap;
+  overflow-x: hidden;
+}
+.blank[contenteditable] { min-height: 15px; }
+.field .line.tall[contenteditable] { line-height: 28px; }
+.boxfield[contenteditable] {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  white-space: nowrap;
+  overflow-x: hidden;
+}
+.charboxes .cb[contenteditable] {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-transform: uppercase;
+  text-align: center;
+}
+
+/* ---- Editable multi-line write-in areas ---- */
+.writein[contenteditable] {
+  outline: none;
+  color: var(--ink);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 26px;
+  padding: 0 9px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ---- Editable empty table cells ---- */
+table.form-table td[contenteditable] {
+  outline: none;
+  color: var(--ink);
+  font-size: 10.5px;
+  font-weight: 500;
+  padding: 4px 7px;
+  vertical-align: middle;
+}
+
+/* ---- Checkbox toggle state ---- */
+.check .box,
+.cbox { position: relative; }
+.check .box.checked::after,
+.cbox.checked::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  width: 4px;
+  height: 8px;
+  border: solid var(--green);
+  border-width: 0 2.2px 2.2px 0;
+  transform: translate(-50%, -58%) rotate(45deg);
+}
+
+/* ============================================================
+   ON-SCREEN ONLY  (never printed / never in the PDF)
+   ============================================================ */
+@media screen {
+
+  /* zoom is a screen-only scale of the whole sheet */
+  doc-page { zoom: var(--fill-zoom, 1); }
+
+  /* fill affordances */
+  [data-fill] {
+    background: color-mix(in srgb, var(--blue) 5%, transparent);
+    border-radius: 3px;
+    transition: background .12s ease, box-shadow .12s ease;
+  }
+  .field .line[data-fill],
+  .sign-field .sig-line[data-fill] { border-radius: 3px 3px 0 0; }
+  [data-fill]:hover { background: color-mix(in srgb, var(--blue) 9%, transparent); }
+  [data-fill]:focus {
+    background: color-mix(in srgb, var(--blue) 12%, transparent);
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--blue) 40%, transparent);
+  }
+  [data-check] { cursor: pointer; }
+  [data-check]:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 14%, transparent); }
+
+  .table-scroll { max-width: 100%; }
+
+  /* ---------- PHONE LAYOUT (screen only) ----------
+     Reflows the fixed Letter sheet into a single readable column with
+     large tap targets. Toggled by body.fill-phone (auto on small
+     screens). The PDF/print output is unaffected. */
+  body.fill-phone { --fill-zoom: 1; }
+
+  body.fill-phone doc-page {
+    --doc-page-w: 100% !important;
+    --doc-page-margin: 18px !important;
+    padding: 10px !important;
+    background: #eef1e8 !important;
+  }
+  body.fill-phone .sheet { max-width: 100%; }
+
+  body.fill-phone .grid { grid-template-columns: 1fr !important; gap: 15px !important; }
+  body.fill-phone .col-2,
+  body.fill-phone .col-3,
+  body.fill-phone .col-all { grid-column: auto !important; }
+
+  body.fill-phone .form-masthead { flex-direction: column; align-items: flex-start; gap: 10px; }
+  body.fill-phone .form-meta { text-align: left; font-size: 11px; }
+  body.fill-phone .form-title h1 { font-size: 27px; }
+  body.fill-phone .form-title p.lede { font-size: 13px; max-width: 100%; }
+  body.fill-phone .section-head h2 { font-size: 15px; }
+  body.fill-phone .field > label { font-size: 11.5px; letter-spacing: 0.04em; }
+
+  body.fill-phone .field .line[contenteditable],
+  body.fill-phone .sign-field .sig-line[contenteditable],
+  body.fill-phone .boxfield[contenteditable] {
+    height: 46px;
+    line-height: 44px;
+    font-size: 16px;
+    padding: 0 13px;
+    border: 1.5px solid var(--field);
+    border-radius: 10px;
+    background: #fff;
+    white-space: nowrap;
+  }
+  body.fill-phone .field .line.tall[contenteditable] { height: 54px; line-height: 52px; }
+  body.fill-phone .is-signature[contenteditable] { font-size: 28px; line-height: 44px; }
+
+  body.fill-phone .writein[contenteditable] {
+    min-height: 110px;
+    height: auto;
+    font-size: 16px;
+    line-height: 25px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--field);
+    border-radius: 12px;
+    background: #fff;
+  }
+
+  body.fill-phone .checks { gap: 10px; }
+  body.fill-phone .checks[style] { height: auto !important; align-items: stretch !important; }
+  body.fill-phone .check {
+    font-size: 15px;
+    gap: 11px;
+    padding: 11px 14px;
+    border: 1.5px solid var(--field);
+    border-radius: 11px;
+    background: #fff;
+    min-height: 46px;
+  }
+  body.fill-phone .check .box { width: 22px; height: 22px; border-width: 2px; }
+  body.fill-phone .check .box.checked::after { width: 6px; height: 11px; border-width: 0 3px 3px 0; }
+
+  /* wide grid tables scroll sideways instead of squeezing */
+  body.fill-phone .table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+  body.fill-phone .table-scroll table.form-table { min-width: 600px; }
+
+  body.fill-phone .sign-row { grid-template-columns: 1fr !important; gap: 16px; }
+  body.fill-phone .office-use { padding: 12px; }
+}
+
+/* ============================================================
+   TOOLBAR
+   ============================================================ */
+.fill-toolbar {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  background: #fff;
+  border: 1.5px solid #e6e0cc;
+  border-radius: 14px;
+  box-shadow: 0 10px 34px -14px rgba(31, 46, 26, .35);
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.fill-toolbar .ft-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: #f4f2ea;
+  border-radius: 10px;
+}
+.fill-toolbar .ft-sep { width: 1px; align-self: stretch; background: #e6e0cc; margin: 2px 2px; }
+
+.fill-toolbar button {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: none;
+  border-radius: 9px;
+  padding: 9px 13px;
+  cursor: pointer;
+  color: #fff;
+  background: var(--green, #2aa63a);
+  transition: filter .12s ease, background .12s ease;
+  white-space: nowrap;
+}
+.fill-toolbar button:hover { filter: brightness(.94); }
+.fill-toolbar button[data-act="pdf"] { background: #2f6fd6; }
+.fill-toolbar button[data-act="share"] { background: #9b51c7; }
+.fill-toolbar button.ghost { background: #f4f2ea; color: #4a5545; }
+.fill-toolbar button.ghost:hover { background: #ece8dd; filter: none; }
+
+/* Back-to-library button, pinned to the top-left */
+.fill-back {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 9999;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1f2e1a;
+  background: #fff;
+  border: 1.5px solid #e6e0cc;
+  border-radius: 12px;
+  padding: 10px 15px 10px 12px;
+  cursor: pointer;
+  box-shadow: 0 10px 34px -14px rgba(31, 46, 26, .35);
+  transition: background .12s ease;
+}
+.fill-back:hover { background: #f4f2ea; }
+.fill-back svg { width: 15px; height: 15px; }
+
+/* Save / Open progress bar — quiet, at the end of the page */
+.fill-savebar {
+  max-width: 850px;
+  margin: 26px auto 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 18px;
+  background: #f7f4ea;
+  border: 1.5px dashed #ddd6bf;
+  border-radius: 14px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.fill-savebar .fs-note { font-size: 12.5px; color: #6b7561; font-weight: 600; }
+.fill-savebar button {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #1f8a5b;
+  background: color-mix(in srgb, #1f8a5b 9%, #fff);
+  border: 1.4px solid color-mix(in srgb, #1f8a5b 35%, #fff);
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.fill-savebar button:hover { background: color-mix(in srgb, #1f8a5b 16%, #fff); }
+@media print { .fill-savebar { display: none !important; } }
+
+/* Add-row button under opt-in tables */
+.add-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--blue, #2f6fd6);
+  background: color-mix(in srgb, var(--blue, #2f6fd6) 8%, #fff);
+  border: 1.4px dashed color-mix(in srgb, var(--blue, #2f6fd6) 45%, #fff);
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.add-row:hover { background: color-mix(in srgb, var(--blue, #2f6fd6) 14%, #fff); }
+.add-row svg { width: 13px; height: 13px; }
+@media print { .add-row { display: none !important; } }
+
+/* Delete-row control (screen only) */
+.row-del-col { width: 58px; text-align: center; white-space: nowrap; padding: 0 !important; }
+.task .row-del { margin-left: auto; }
+.row-del {
+  width: 22px; height: 22px;
+  display: inline-flex; align-items: center; justify-content: center;
+  vertical-align: middle;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 16px; line-height: 1; font-weight: 700;
+  color: #b0483f;
+  background: color-mix(in srgb, var(--berry, #e5396a) 10%, #fff);
+  border: 1.3px solid color-mix(in srgb, var(--berry, #e5396a) 30%, #fff);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.row-del:hover { background: color-mix(in srgb, var(--berry, #e5396a) 22%, #fff); }
+
+/* Drag-to-reorder handle (screen only) */
+.row-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 24px;
+  vertical-align: middle;
+  margin-right: 4px;
+  color: #b7bdae;
+  cursor: grab;
+  touch-action: none;
+  flex: none;
+}
+.row-grip:hover { color: #7f8a72; }
+.row-grip:active { cursor: grabbing; }
+.row-grip svg { width: 14px; height: 14px; pointer-events: none; }
+.task .row-grip { margin-right: 2px; margin-top: -1px; }
+.row-dragging { opacity: .55; background: color-mix(in srgb, var(--blue, #2f6fd6) 10%, #fff) !important; }
+tr.row-dragging td { background: color-mix(in srgb, var(--blue, #2f6fd6) 8%, #fff) !important; }
+
+@media print { .row-del, .row-del-col, .row-grip { display: none !important; } }
+
+/* zoom + view group buttons */
+.fill-toolbar .ft-group button {
+  background: transparent;
+  color: #4a5545;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.fill-toolbar .ft-group button:hover { background: #fff; filter: none; }
+.fill-toolbar .ft-group button.zoom { font-size: 16px; line-height: 1; padding: 6px 11px; }
+.fill-toolbar .ft-zoom-val {
+  font-size: 12px; font-weight: 700; color: #4a5545;
+  min-width: 42px; text-align: center; cursor: pointer;
+  background: transparent; border: none; padding: 7px 4px; border-radius: 8px;
+}
+.fill-toolbar .ft-zoom-val:hover { background: #fff; }
+.fill-toolbar .ft-group button.seg.active { background: #fff; color: #1f2e1a; box-shadow: 0 1px 3px rgba(31,46,26,.12); }
+
+/* ---- Share popover ---- */
+.share-pop {
+  position: fixed;
+  top: 70px;
+  right: 16px;
+  z-index: 10000;
+  width: 300px;
+  background: #fff;
+  border: 1.5px solid #e6e0cc;
+  border-radius: 14px;
+  box-shadow: 0 18px 48px -18px rgba(31, 46, 26, .45);
+  padding: 16px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.share-pop h4 { margin: 0 0 4px; font-size: 14px; font-weight: 800; color: #1f2e1a; }
+.share-pop p { margin: 0 0 12px; font-size: 12px; color: #8a9482; line-height: 1.4; }
+.share-pop .url {
+  width: 100%;
+  font-family: inherit;
+  font-size: 12px;
+  color: #1f2e1a;
+  border: 1.5px solid #e6e0cc;
+  border-radius: 9px;
+  padding: 9px 11px;
+  margin-bottom: 10px;
+  background: #fbfaf5;
+}
+.share-pop .row { display: flex; gap: 8px; }
+.share-pop .row button {
+  flex: 1;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  border: none;
+  border-radius: 9px;
+  padding: 10px;
+  cursor: pointer;
+  color: #fff;
+  background: #2aa63a;
+}
+.share-pop .row button.alt { background: #2f6fd6; }
+.share-pop .row button:hover { filter: brightness(.95); }
+.share-pop .close {
+  position: absolute; top: 10px; right: 10px;
+  background: none; border: none; cursor: pointer;
+  font-size: 18px; line-height: 1; color: #8a9482; padding: 4px;
+}
+
+/* ---- Toast ---- */
+.fill-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%) translateY(12px);
+  z-index: 10001;
+  background: #1f2e1a;
+  color: #fff;
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 18px;
+  border-radius: 999px;
+  box-shadow: 0 12px 30px -10px rgba(0,0,0,.4);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .2s ease, transform .2s ease;
+}
+.fill-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ---------- Responsive toolbar ---------- */
+@media (max-width: 760px) {
+  .fill-toolbar {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    border-radius: 16px 16px 0 0;
+    padding: 9px 10px calc(9px + env(safe-area-inset-bottom, 0px));
+    gap: 7px;
+    justify-content: center;
+    flex-wrap: wrap;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+  }
+  .fill-toolbar .ft-zoom { display: none; }   /* pinch-zoom on phones */
+  .fill-back { top: 10px; left: 10px; padding: 8px 12px 8px 9px; font-size: 12px; }
+  .fill-toolbar .ft-sep { display: none; }
+  .fill-toolbar button { flex: 1 1 auto; padding: 12px 12px; font-size: 13.5px; text-align: center; }
+  .fill-toolbar .ft-group { flex: 1 1 100%; justify-content: center; }
+  .fill-toolbar .ft-group button.seg { flex: 1; padding: 10px; }
+  .share-pop {
+    top: auto; bottom: 78px; left: 12px; right: 12px; width: auto;
+  }
+}
+
+/* ============================================================
+   DARK MODE (screen only — printing / Save as PDF is always the
+   normal light document, no matter what mode is on)
+   ============================================================ */
+@media screen {
+  html[data-theme="dark"] body { background: #14180f; }
+
+  /* Invert the sheet itself; flip images back so logos stay true */
+  html[data-theme="dark"] doc-page { filter: invert(0.93) hue-rotate(180deg); }
+  html[data-theme="dark"] doc-page img { filter: invert(1) hue-rotate(180deg); }
+
+  /* Chrome around the sheet */
+  html[data-theme="dark"] .fill-toolbar { background: #1d2316; border-color: #2f3826; box-shadow: 0 10px 34px -14px rgba(0,0,0,.7); }
+  html[data-theme="dark"] .fill-toolbar .ft-group { background: #141a0f; }
+  html[data-theme="dark"] .fill-toolbar .ft-sep { background: #2f3826; }
+  html[data-theme="dark"] .fill-toolbar button.ghost { background: #141a0f; color: #a6b099; }
+  html[data-theme="dark"] .fill-toolbar button.ghost:hover { background: #232b1a; }
+  html[data-theme="dark"] .fill-toolbar .ft-group button { color: #a6b099; }
+  html[data-theme="dark"] .fill-toolbar .ft-group button:hover { background: #232b1a; }
+  html[data-theme="dark"] .fill-toolbar .ft-group button.seg.active { background: #2a331f; color: #e9ecdd; box-shadow: none; }
+  html[data-theme="dark"] .fill-toolbar .ft-zoom-val { color: #a6b099; }
+  html[data-theme="dark"] .fill-toolbar .ft-zoom-val:hover { background: #232b1a; }
+  html[data-theme="dark"] .fill-back { background: #1d2316; border-color: #2f3826; color: #e9ecdd; box-shadow: 0 10px 34px -14px rgba(0,0,0,.7); }
+  html[data-theme="dark"] .fill-back:hover { background: #232b1a; }
+  html[data-theme="dark"] .fill-savebar { background: #1a2014; border-color: #39422c; }
+  html[data-theme="dark"] .fill-savebar .fs-note { color: #a6b099; }
+  html[data-theme="dark"] .share-pop { background: #1d2316; border-color: #2f3826; }
+  html[data-theme="dark"] .share-pop h4 { color: #e9ecdd; }
+  html[data-theme="dark"] .share-pop .url { background: #141a0f; border-color: #2f3826; color: #e9ecdd; }
+  html[data-theme="dark"] .portal-tabs { background: rgba(20,24,15,.95) !important; border-bottom-color: #2f3826 !important; }
+  html[data-theme="dark"] .portal-tabs .pt-brand { color: #e9ecdd !important; }
+  html[data-theme="dark"] .portal-tabs nav a { color: #a6b099 !important; }
+  html[data-theme="dark"] .portal-tabs nav a:hover { background: #232b1a !important; color: #e9ecdd !important; }
+}

@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Agency Forms — Noor Therapy Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    background: #fdfaf3;
+    color: #1f2e1a;
+    min-height: 100vh;
+    padding: 48px 24px 80px;
+  }
+  .wrap { max-width: 820px; margin: 0 auto; }
+  .head { display: flex; align-items: center; gap: 16px; margin-bottom: 6px; }
+  .head img { height: 52px; }
+  .kicker { font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; font-weight: 700; color: #2aa63a; margin: 26px 0 6px; }
+  h1 { font-size: 34px; font-weight: 800; letter-spacing: -0.025em; margin: 0 0 8px; }
+  .sub { color: #4a5545; font-size: 15px; max-width: 62ch; margin: 0 0 8px; }
+
+  /* ---- Search + view toggle ---- */
+  .controls {
+    display: flex; align-items: center; gap: 12px;
+    margin: 22px 0 4px;
+  }
+  .search {
+    flex: 1; display: flex; align-items: center; gap: 10px;
+    background: #fff; border: 1.5px solid #e6e0cc; border-radius: 12px;
+    padding: 11px 14px;
+    transition: border-color .15s ease, box-shadow .15s ease;
+  }
+  .search:focus-within { border-color: #2aa63a; box-shadow: 0 0 0 3px color-mix(in srgb, #2aa63a 14%, transparent); }
+  .search svg { width: 16px; height: 16px; color: #8a9482; flex: none; }
+  .search input {
+    flex: 1; border: 0; outline: none; background: transparent;
+    font-family: inherit; font-size: 14px; color: #1f2e1a; min-width: 0;
+  }
+  .search input::placeholder { color: #a3ac99; }
+  .search .clear-x {
+    display: none; border: 0; background: #eee9d9; color: #6b7561;
+    width: 20px; height: 20px; border-radius: 50%; cursor: pointer;
+    font-size: 13px; line-height: 1; font-weight: 700; flex: none;
+    align-items: center; justify-content: center;
+  }
+  .search.has-text .clear-x { display: inline-flex; }
+  .view-toggle {
+    display: flex; background: #f1ecdd; border: 1.5px solid #e6e0cc;
+    border-radius: 12px; padding: 3px; gap: 2px; flex: none;
+  }
+  .view-toggle button {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 0; background: transparent; color: #6b7561;
+    font-family: inherit; font-size: 12.5px; font-weight: 700;
+    padding: 8px 12px; border-radius: 9px; cursor: pointer;
+    transition: background .12s ease, color .12s ease;
+  }
+  .view-toggle button svg { width: 14px; height: 14px; }
+  .view-toggle button.active { background: #fff; color: #1f2e1a; box-shadow: 0 1px 4px rgba(31,46,26,.12); }
+  .no-results {
+    display: none; margin: 40px 0; text-align: center;
+    color: #8a9482; font-size: 14px;
+  }
+  body.searching .group-title.empty { display: none; }
+
+  .group-title {
+    display: flex; align-items: center; gap: 12px;
+    font-size: 13px; letter-spacing: 0.14em; text-transform: uppercase;
+    font-weight: 800; color: #1f2e1a; margin: 38px 0 16px;
+  }
+  .group-title::after { content: ""; flex: 1; height: 1.5px; background: #e6e0cc; }
+
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 640px) { .cards { grid-template-columns: 1fr; } }
+
+  /* ---- List view (default) ---- */
+  body.view-list .cards { grid-template-columns: 1fr; gap: 8px; }
+  body.view-list .card { align-items: center; padding: 12px 16px; border-radius: 13px; }
+  body.view-list .card:hover { transform: none; }
+  body.view-list .badge { width: 36px; height: 36px; border-radius: 10px; }
+  body.view-list .badge svg { width: 18px; height: 18px; }
+  body.view-list .card .body { display: flex; align-items: center; gap: 14px; }
+  body.view-list .card h3 { margin: 0; flex: none; }
+  body.view-list .card p { margin: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.view-list .card .links { flex: none; }
+  @media (max-width: 640px) {
+    body.view-list .card p { display: none; }
+    body.view-list .card .body { justify-content: space-between; }
+  }
+  .card {
+    display: flex; align-items: flex-start; gap: 16px;
+    background: #fff; border: 1.5px solid #e6e0cc; border-radius: 16px;
+    padding: 18px 20px;
+    transition: transform .2s cubic-bezier(.2,.7,.2,1), box-shadow .2s, border-color .2s;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 1px 0 rgba(31,46,26,.04), 0 22px 50px -26px var(--c);
+    border-color: var(--c);
+  }
+  .badge {
+    flex: none; width: 44px; height: 44px; border-radius: 12px;
+    background: color-mix(in srgb, var(--c) 15%, #fff);
+    color: var(--c); display: flex; align-items: center; justify-content: center;
+  }
+  .badge svg { width: 22px; height: 22px; }
+  .card .body { flex: 1; min-width: 0; }
+  .card h3 { margin: 0 0 3px; font-size: 16px; font-weight: 700; line-height: 1.2; }
+  .card p { margin: 0 0 11px; font-size: 12.5px; color: #4a5545; line-height: 1.45; }
+  .card .links { display: flex; flex-wrap: wrap; gap: 8px; }
+  .card .links a {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12.5px; font-weight: 700; text-decoration: none;
+    padding: 7px 12px; border-radius: 9px;
+  }
+  .card .links a.primary { background: var(--c); color: #fff; }
+  .card .links a.ghost { background: color-mix(in srgb, var(--c) 12%, #fff); color: var(--c); }
+  .card .links a svg { width: 13px; height: 13px; }
+  .note { margin-top: 34px; font-size: 12.5px; color: #8a9482; line-height: 1.6; }
+
+  /* reusable svg snippets via <use> */
+  .icons { display: none; }
+</style>
+</head>
+<body>
+  <svg class="icons" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <g id="i-phone" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></g>
+      <g id="i-print" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z"/></g>
+    </defs>
+  </svg>
+
+  <div class="wrap">
+    <div class="head">
+      <img src="noor-logo.png" alt="Noor Therapy Center"/>
+    </div>
+    <div class="kicker">Agency Forms</div>
+    <h1>Forms Library</h1>
+    <p class="sub">Open any form to fill it out on your computer and download a PDF — or print it blank to complete by hand.</p>
+
+    <div class="controls">
+      <label class="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+        <input id="form-search" type="text" placeholder="Search forms…" autocomplete="off" spellcheck="false"/>
+        <button type="button" class="clear-x" aria-label="Clear search">×</button>
+      </label>
+      <div class="view-toggle" role="group" aria-label="View">
+        <button type="button" data-view="list" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>List</button>
+        <button type="button" data-view="grid"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Grid</button>
+      </div>
+    </div>
+
+    <!-- ============ FAMILIES & CLIENTS ============ -->
+    <div class="group-title">Families &amp; Clients</div>
+    <div class="cards">
+
+      <div class="card" style="--c:#2f6fd6">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/></svg></span>
+        <div class="body">
+          <h3>Client Intake Form</h3>
+          <p>New families — child info, insurance, diagnosis, goals, consent.</p>
+          <div class="links">
+            <a class="ghost" href="Client Intake Form.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#e5396a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+        <div class="body">
+          <h3>Photography &amp; Media Consent</h3>
+          <p>Parent permission for how a child's photo or video may be used.</p>
+          <div class="links">
+            <a class="ghost" href="Photography and Media Consent.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="card" style="--c:#2aa63a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/><path d="m9 14 2 2 4-4"/></svg></span>
+        <div class="body">
+          <h3>Client File Checklist</h3>
+          <p>Verify every required client document is on file before services.</p>
+          <div class="links">
+            <a class="ghost" href="Client File Checklist.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ HIRING & STAFF ============ -->
+    <div class="group-title">Hiring &amp; Staff</div>
+    <div class="cards">
+
+      <div class="card" style="--c:#2aa63a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg></span>
+        <div class="body">
+          <h3>Employment Application</h3>
+          <p>Job applicants — position, credentials, history, references.</p>
+          <div class="links">
+            <a class="ghost" href="Employment Application.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#9b51c7">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></svg></span>
+        <div class="body">
+          <h3>Direct Deposit Authorization</h3>
+          <p>Staff payroll — bank routing / account details and authorization.</p>
+          <div class="links">
+            <a class="ghost" href="Direct Deposit Authorization.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#2f6fd6">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18M8 15h3"/></svg></span>
+        <div class="body">
+          <h3>Time-Off Request</h3>
+          <p>Staff leave request with coverage plan and supervisor approval.</p>
+          <div class="links">
+            <a class="ghost" href="Time-Off Request.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#f18a2c">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/></svg></span>
+        <div class="body">
+          <h3>Written Warning</h3>
+          <p>Document a workplace concern and the corrective action expected.</p>
+          <div class="links">
+            <a class="ghost" href="Written Warning.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#2aa63a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg></span>
+        <div class="body">
+          <h3>Performance Improvement Plan</h3>
+          <p>Structured goals, support, and check-ins to help staff succeed.</p>
+          <div class="links">
+            <a class="ghost" href="Performance Improvement Plan.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#e5396a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5M21 12H9"/></svg></span>
+        <div class="body">
+          <h3>Exit Interview</h3>
+          <p>Feedback from departing staff — experience, ratings, reasons.</p>
+          <div class="links">
+            <a class="ghost" href="Exit Interview.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#9b51c7">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2z"/><path d="m9 14 2 2 4-4"/></svg></span>
+        <div class="body">
+          <h3>Employee File Checklist</h3>
+          <p>Confirm every required document is on file for each staff member.</p>
+          <div class="links">
+            <a class="ghost" href="Employee File Checklist.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ OPERATIONS & BILLING ============ -->
+    <div class="group-title">Operations &amp; Billing</div>
+    <div class="cards">
+
+      <div class="card" style="--c:#2f6fd6">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="2" width="8" height="4" rx="1"/><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><path d="M9 12h6M9 16h4"/></svg></span>
+        <div class="body">
+          <h3>Visitor Sign-In Sheet</h3>
+          <p>Visitor log with a confidentiality / non-disclosure agreement.</p>
+          <div class="links">
+            <a class="ghost" href="Visitor Sign-In Sheet.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#e5396a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 5v6c0 5 3.5 8.5 8 11 4.5-2.5 8-6 8-11V5z"/><path d="M12 8v4M12 16h.01"/></svg></span>
+        <div class="body">
+          <h3>Incident Report</h3>
+          <p>Document injuries, behavioral events, med errors, or elopement.</p>
+          <div class="links">
+            <a class="ghost" href="Incident Report.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      
+      <div class="card" style="--c:#2aa63a">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16.5 9.4 7.5 4.21M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><path d="M3.27 6.96 12 12.01l8.73-5.05M12 22.08V12"/></svg></span>
+        <div class="body">
+          <h3>Supply Inventory</h3>
+          <p>Count on-hand supplies and flag items to reorder.</p>
+          <div class="links">
+            <a class="ghost" href="Supply Inventory.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="--c:#9b51c7">
+        <span class="badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1z"/><path d="M9 9h6M9 13h4"/></svg></span>
+        <div class="body">
+          <h3>Billing Correction Form</h3>
+          <p>Request a fix to a claim — code, units, date, payer, or amount.</p>
+          <div class="links">
+            <a class="ghost" href="Billing Correction Form.html"><svg viewBox="0 0 24 24"><use href="#i-print"/></svg>Open</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <p class="no-results">No forms match your search.</p>
+
+    <p class="note">Each form can be <strong>typed on a computer</strong> and saved as a PDF with the <strong>Download PDF</strong> button, or <strong>printed blank</strong> to fill by hand. When printing, enable "Background graphics" so the color accents show.</p>
+  </div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---- List / grid view toggle (list is default) ---- */
+  var KEY = 'noor-forms-view';
+  var body = document.body;
+  var buttons = document.querySelectorAll('.view-toggle button');
+  function setView(v) {
+    body.classList.toggle('view-list', v === 'list');
+    buttons.forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-view') === v); });
+    try { localStorage.setItem(KEY, v); } catch (e) {}
+  }
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+  });
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  setView(saved === 'grid' ? 'grid' : 'list');
+
+  /* ---- Search ---- */
+  var input = document.getElementById('form-search');
+  var box = input.closest('.search');
+  var clearX = box.querySelector('.clear-x');
+  var cards = Array.prototype.slice.call(document.querySelectorAll('.card'));
+  var groups = Array.prototype.slice.call(document.querySelectorAll('.group-title'));
+  var noRes = document.querySelector('.no-results');
+
+  function applyFilter() {
+    var q = input.value.trim().toLowerCase();
+    box.classList.toggle('has-text', q.length > 0);
+    body.classList.toggle('searching', q.length > 0);
+    var any = false;
+    cards.forEach(function (c) {
+      var hit = !q || c.textContent.toLowerCase().indexOf(q) !== -1;
+      c.style.display = hit ? '' : 'none';
+      if (hit) any = true;
+    });
+    groups.forEach(function (g) {
+      var grid = g.nextElementSibling;
+      var visible = grid ? grid.querySelectorAll('.card:not([style*="display: none"])').length : 0;
+      g.classList.toggle('empty', visible === 0);
+      if (grid) grid.style.display = visible === 0 && q ? 'none' : '';
+    });
+    noRes.style.display = any ? 'none' : 'block';
+  }
+  input.addEventListener('input', applyFilter);
+  clearX.addEventListener('click', function () { input.value = ''; applyFilter(); input.focus(); });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === '/' && document.activeElement !== input) { e.preventDefault(); input.focus(); }
+    if (e.key === 'Escape' && document.activeElement === input) { input.value = ''; applyFilter(); input.blur(); }
+  });
+})();
+</script>
+
+</body>
+</html>

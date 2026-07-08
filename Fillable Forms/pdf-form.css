@@ -1,0 +1,87 @@
+/* PDF overlay form — shared styles */
+* { box-sizing: border-box; }
+body { margin: 0; background: #e9ece4; font-family: 'DM Sans', system-ui, sans-serif; }
+
+.portal-tabs { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; background: rgba(253,250,243,.96); backdrop-filter: blur(8px); border-bottom: 1.5px solid #e6e0cc; padding: 10px 18px; }
+.portal-tabs .pt-brand { display: inline-flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 800; color: #1f2e1a; text-decoration: none; }
+.portal-tabs .pt-brand img { height: 26px; }
+.portal-tabs nav { display: flex; gap: 4px; margin-left: auto; flex-wrap: wrap; }
+.portal-tabs nav a { font-size: 12.5px; font-weight: 700; color: #4a5545; text-decoration: none; padding: 7px 12px; border-radius: 999px; }
+.portal-tabs nav a:hover { background: #f3eddd; color: #1f2e1a; }
+.portal-tabs nav a.active { background: #2aa63a; color: #fff; }
+
+.pf-toolbar { position: sticky; top: 0; z-index: 50; display: flex; align-items: center; gap: 10px; padding: 10px 16px; background: #fff; border-bottom: 1.5px solid #ddd; flex-wrap: wrap; }
+.portal-tabs + .pf-toolbar { top: 54px; }
+.pf-toolbar .pf-title { font-size: 13px; font-weight: 800; color: #1f2e1a; flex: 1; min-width: 160px; }
+.pf-toolbar button { font-family: inherit; font-size: 12.5px; font-weight: 700; border: none; border-radius: 999px; padding: 9px 15px; cursor: pointer; }
+.pf-toolbar .pf-back { background: #f0f0ea; color: #1f2e1a; display: inline-flex; align-items: center; gap: 6px; }
+.pf-toolbar .pf-back svg { width: 14px; height: 14px; }
+.pf-toolbar .pf-print { background: #2f6fd6; color: #fff; }
+.pf-toolbar .pf-clear { background: #f0f0ea; color: #4a5545; }
+.pf-toolbar .pf-theme { background: #f0f0ea; color: #4a5545; width: 38px; padding: 9px 0; font-size: 14px; line-height: 1; }
+.pf-toolbar button:hover { filter: brightness(.95); }
+.pf-saved { font-size: 12px; font-weight: 700; color: #2aa63a; opacity: 0; transition: opacity .2s ease; }
+.pf-saved.on { opacity: 1; }
+
+#pf-pages { max-width: 900px; margin: 22px auto 60px; padding: 0 14px; display: grid; gap: 22px; }
+.pf-loading { text-align: center; font-size: 13px; font-weight: 600; color: #4a5545; padding: 50px 0; }
+
+/* Save / open progress bar */
+.pf-savebar {
+  max-width: 850px; margin: 0 auto 26px;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px;
+  padding: 14px 18px;
+  background: #f7f4ea; border: 1.5px dashed #ddd6bf; border-radius: 14px;
+  font-family: 'DM Sans', system-ui, sans-serif;
+}
+.pf-savebar .fs-note { font-size: 12.5px; color: #6b7561; font-weight: 600; }
+.pf-savebar button {
+  font-family: inherit; font-size: 12.5px; font-weight: 700;
+  color: #1f8a5b; background: #f0f7f2; border: 1.4px solid #b9dcc8;
+  border-radius: 9px; padding: 8px 14px; cursor: pointer;
+}
+.pf-savebar button:hover { background: #e2f0e7; }
+#pf-pages ~ .pf-savebar { margin-top: -20px; }
+
+.pf-page { position: relative; background: #fff; box-shadow: 0 14px 40px -18px rgba(0,0,0,.35); border-radius: 3px; overflow: hidden; }
+.pf-page canvas { display: block; width: 100%; height: auto; }
+.pf-layer { position: absolute; inset: 0; }
+
+.pf-field { position: absolute; outline: none; color: #0b2e63; font-family: Helvetica, Arial, sans-serif; font-weight: 600; white-space: nowrap; overflow: hidden; background: rgba(47,111,214,.08); border-radius: 2px; padding: 0 2px; cursor: text; }
+.pf-field.pf-ml { white-space: pre-wrap; overflow-y: auto; line-height: 1.25 !important; }
+.pf-field:hover { background: rgba(47,111,214,.14); }
+.pf-field:focus { background: rgba(47,111,214,.16); box-shadow: inset 0 0 0 1.5px rgba(47,111,214,.55); }
+.pf-sig { font-family: 'Dancing Script', 'Segoe Script', 'Snell Roundhand', cursive; font-weight: 600; color: #12295c; }
+
+.pf-check { position: absolute; cursor: pointer; border-radius: 2px; background: rgba(47,111,214,.08); display: flex; align-items: center; justify-content: center; color: #0b2e63; }
+.pf-check:hover { background: rgba(47,111,214,.16); }
+.pf-check.checked::after { content: "✓"; font-weight: 800; line-height: 1; }
+
+@media print {
+  .no-print, .pf-toolbar, .portal-tabs, .pf-savebar { display: none !important; }
+  body { background: #fff; }
+  #pf-pages { max-width: none; margin: 0; padding: 0; gap: 0; display: block; }
+  .pf-page { box-shadow: none; border-radius: 0; page-break-after: always; break-after: page; }
+  .pf-page:last-child { page-break-after: auto; break-after: auto; }
+  .pf-field, .pf-check { background: transparent !important; box-shadow: none !important; }
+}
+@page { size: letter; margin: 0; }
+
+/* ---- Dark mode (screen only — print / Save as PDF is always light) ---- */
+@media screen {
+  html[data-theme="dark"] body { background: #14180f; }
+  html[data-theme="dark"] .pf-page { filter: invert(0.93) hue-rotate(180deg); box-shadow: 0 14px 40px -18px rgba(0,0,0,.8); }
+  html[data-theme="dark"] .pf-toolbar { background: #1d2316; border-bottom-color: #2f3826; }
+  html[data-theme="dark"] .pf-toolbar .pf-title { color: #e9ecdd; }
+  html[data-theme="dark"] .pf-toolbar .pf-back,
+  html[data-theme="dark"] .pf-toolbar .pf-clear,
+  html[data-theme="dark"] .pf-toolbar .pf-theme { background: #141a0f; color: #a6b099; }
+  html[data-theme="dark"] .pf-loading { color: #a6b099; }
+  html[data-theme="dark"] .pf-savebar { background: #1a2014; border-color: #39422c; }
+  html[data-theme="dark"] .pf-savebar .fs-note { color: #a6b099; }
+  html[data-theme="dark"] .pf-savebar button { background: #17301f; border-color: #2d5c3f; color: #8ddd98; }
+  html[data-theme="dark"] .portal-tabs { background: rgba(20,24,15,.95); border-bottom-color: #2f3826; }
+  html[data-theme="dark"] .portal-tabs .pt-brand { color: #e9ecdd; }
+  html[data-theme="dark"] .portal-tabs nav a { color: #a6b099; }
+  html[data-theme="dark"] .portal-tabs nav a:hover { background: #232b1a; color: #e9ecdd; }
+}

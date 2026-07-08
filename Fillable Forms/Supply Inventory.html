@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Supply Inventory — Noor Therapy Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form-styles.css"/>
+<link rel="stylesheet" href="fillable.css"/>
+<style>
+  body { margin: 0; }
+  .inv th, .inv td { font-size: 9.5px; }
+  .inv td { height: 30px; }
+</style>
+<script src="theme-boot.js"></script>
+</head>
+<body>
+
+<doc-page size="letter" margin="0.5in">
+
+  <div slot="footer" class="form-footer">
+    <span>Noor Therapy Center · Supply Inventory</span>
+    <span class="dots">
+      <span style="background:#2aa63a"></span>
+      <span style="background:#f18a2c"></span>
+      <span style="background:#2f6fd6"></span>
+      <span style="background:#9b51c7"></span>
+      <span style="background:#e5396a"></span>
+    </span>
+    <span>Operations · Inventory</span>
+  </div>
+
+  <div class="form-masthead">
+    <img class="logo" src="noor-logo.png" alt="Noor Therapy Center"/>
+    <div class="form-meta">
+      <strong>Noor Therapy Center</strong><br/>
+      6250 Excelsior Blvd, Suite 102<br/>
+      St. Louis Park, MN 55416<br/>
+      (612) 703-9022 · Fax (612) 482-3186<br/>
+      info@noortherapycenter.com
+    </div>
+  </div>
+
+  <div class="form-title">
+    <div class="kicker">Operations</div>
+    <h1>Supply Inventory</h1>
+    <p class="lede">Count on-hand quantities and flag items at or below their reorder point. Submit to the office manager for ordering.</p>
+  </div>
+
+  <div class="grid c4" style="margin-top:16px">
+    <div class="field"><label>Area / Room</label><div class="line"></div></div>
+    <div class="field"><label>Counted By</label><div class="line"></div></div>
+    <div class="field"><label>Date</label><div class="line"></div></div>
+    <div class="field"><label>Category</label><div class="line"></div></div>
+  </div>
+
+  <div style="height:18px"></div>
+
+  <table class="form-table inv">
+    <thead>
+      <tr>
+        <th style="width:34%">Item</th>
+        <th style="width:12%">Unit</th>
+        <th style="width:12%">On Hand</th>
+        <th style="width:12%">Par Level</th>
+        <th style="width:12%">Reorder Qty</th>
+        <th style="width:18%">Notes / Vendor</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+
+  <div style="height:16px"></div>
+  <div class="grid c2">
+    <div class="field">
+      <label>Order Placed?</label>
+      <div class="checks" style="height:20px;align-items:center">
+        <span class="check"><span class="box"></span>Yes</span>
+        <span class="check"><span class="box"></span>No</span>
+        <span class="check"><span class="box"></span>Partial</span>
+      </div>
+    </div>
+    <div class="field"><label>Approved / Ordered By</label><div class="line"></div></div>
+  </div>
+
+</doc-page>
+
+<script src="doc-page.js"></script>
+<script src="fillable.js"></script>
+<script src="submit.js"></script>
+</body>
+</html>

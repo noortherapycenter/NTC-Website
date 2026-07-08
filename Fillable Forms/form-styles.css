@@ -1,0 +1,346 @@
+/* ============================================================
+   Noor Therapy Center — shared print-form stylesheet
+   Used by employee application, client intake, direct deposit.
+   Designed for 8.5x11 Letter, black-and-white printer friendly.
+   ============================================================ */
+
+:root {
+  --ink: #1f2e1a;
+  --ink-soft: #4a5545;
+  --muted: #8a9482;
+  --line: #b9c2ad;
+  --line-strong: #1f2e1a;
+  --field: #cbd3c0;
+  --green: #2aa63a;
+  --berry: #e5396a;
+  --orange: #f18a2c;
+  --purple: #9b51c7;
+  --blue: #2f6fd6;
+  --wash: #f4f7f0;
+}
+
+doc-page:not(:defined) { visibility: hidden; }
+
+* { box-sizing: border-box; }
+
+doc-page {
+  font-family: 'DM Sans', system-ui, sans-serif;
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+/* ---------- Masthead ---------- */
+.form-masthead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 14px;
+  border-bottom: 3px solid var(--green);
+  margin-bottom: 4px;
+}
+.form-masthead img.logo { height: 54px; width: auto; }
+.form-meta {
+  text-align: right;
+  font-size: 9.5px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+  letter-spacing: 0.01em;
+}
+.form-meta strong { color: var(--ink); }
+
+/* ---------- Title band ---------- */
+.form-title {
+  margin: 18px 0 4px;
+}
+.form-title .kicker {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--green);
+  margin-bottom: 5px;
+}
+.form-title h1 {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+}
+.form-title p.lede {
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: var(--ink-soft);
+  max-width: 92%;
+}
+
+/* ---------- Section headers ---------- */
+.section {
+  margin-top: 20px;
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.section-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 11px;
+}
+.section-num {
+  flex: none;
+  width: 20px; height: 20px;
+  border-radius: 50%;
+  background: var(--green);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+}
+.section-head h2 {
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.section-head .sub {
+  font-size: 9.5px;
+  color: var(--muted);
+  font-weight: 600;
+  margin-left: auto;
+}
+
+/* accent color variants for section numbers */
+.section.c-berry  .section-num { background: var(--berry); }
+.section.c-orange .section-num { background: var(--orange); }
+.section.c-purple .section-num { background: var(--purple); }
+.section.c-blue   .section-num { background: var(--blue); }
+
+/* ---------- Field grid ---------- */
+.grid {
+  display: grid;
+  gap: 13px 16px;
+}
+.grid.c2 { grid-template-columns: 1fr 1fr; }
+.grid.c3 { grid-template-columns: 1fr 1fr 1fr; }
+.grid.c4 { grid-template-columns: 1fr 1fr 1fr 1fr; }
+.col-2 { grid-column: span 2; }
+.col-3 { grid-column: span 3; }
+.col-all { grid-column: 1 / -1; }
+
+/* ---------- A single labeled write-in field ---------- */
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field > label {
+  font-size: 8.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.field > label .req { color: var(--berry); margin-left: 1px; }
+.field .line {
+  border-bottom: 1.3px solid var(--field);
+  height: 20px;
+}
+.field .line.tall { height: 30px; }
+.field .hint {
+  font-size: 8px;
+  color: var(--muted);
+  font-weight: 500;
+  letter-spacing: 0.02em;
+}
+
+/* boxed input (for money, routing numbers etc) */
+.boxfield {
+  border: 1.3px solid var(--field);
+  border-radius: 4px;
+  height: 26px;
+}
+
+/* segmented character boxes */
+.charboxes { display: flex; gap: 4px; }
+.charboxes .cb {
+  flex: 1;
+  height: 26px;
+  border: 1.3px solid var(--field);
+  border-radius: 3px;
+  min-width: 0;
+}
+
+/* ---------- Checkboxes ---------- */
+.checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.check {
+  display: flex; align-items: center; gap: 7px;
+  font-size: 11px; color: var(--ink);
+}
+.check .box {
+  flex: none;
+  width: 13px; height: 13px;
+  border: 1.5px solid var(--ink-soft);
+  border-radius: 3px;
+}
+.check.lg .box { width: 15px; height: 15px; }
+
+/* ---------- Notes / write-in area ---------- */
+.writein {
+  border: 1.3px solid var(--field);
+  border-radius: 6px;
+  padding: 0;
+  background: repeating-linear-gradient(
+    transparent,
+    transparent 25px,
+    var(--field) 25px,
+    var(--field) 26px
+  );
+}
+.writein.h3 { height: 78px; }
+.writein.h4 { height: 104px; }
+.writein.h5 { height: 130px; }
+
+/* ---------- Info callout ---------- */
+.callout {
+  background: var(--wash);
+  border-left: 3px solid var(--green);
+  border-radius: 0 6px 6px 0;
+  padding: 9px 12px;
+  font-size: 10px;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
+.callout strong { color: var(--ink); }
+.callout.berry  { border-left-color: var(--berry); }
+.callout.blue   { border-left-color: var(--blue); }
+
+/* ---------- Table (schedule / history) ---------- */
+table.form-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+table.form-table th {
+  text-align: left;
+  font-size: 8px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+  padding: 6px 7px;
+  border-bottom: 1.5px solid var(--line-strong);
+}
+table.form-table td {
+  padding: 0;
+  border-bottom: 1.3px solid var(--field);
+  border-right: 1px solid var(--wash);
+  height: 27px;
+}
+table.form-table td:last-child { border-right: none; }
+
+/* ---------- Data / checklist tables with text content ---------- */
+table.form-table.rows td {
+  padding: 8px 9px;
+  height: auto;
+  vertical-align: middle;
+  font-size: 10.5px;
+  border-right: 1px solid #eef1e8;
+}
+table.form-table.rows td.tc { text-align: center; }
+table.form-table th.tc { text-align: center; }
+table.form-table.rows td.doc { font-weight: 600; color: var(--ink); }
+table.form-table.rows tr:nth-child(even) td { background: #fbfcf9; }
+.cbox {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 1.6px solid var(--ink-soft);
+  border-radius: 3px;
+  vertical-align: -2px;
+}
+.cbox.rnd { border-radius: 50%; }
+
+/* ---------- Signature row ---------- */
+.sign-row {
+  display: grid;
+  grid-template-columns: 2.4fr 1fr;
+  gap: 22px;
+  margin-top: 8px;
+}
+.sign-field { display: flex; flex-direction: column; gap: 3px; }
+.sign-field .sig-line {
+  border-bottom: 1.5px solid var(--line-strong);
+  height: 30px;
+}
+.sign-field label {
+  font-size: 8.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+
+/* ---------- Legal fine print ---------- */
+.fineprint {
+  font-size: 9px;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+
+/* ---------- Footer ---------- */
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1.5px solid var(--line);
+  padding-top: 8px;
+  font-size: 8.5px;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.form-footer .dots { display: flex; gap: 4px; }
+.form-footer .dots span { width: 7px; height: 7px; border-radius: 50%; }
+
+/* ---------- Office use box ---------- */
+.office-use {
+  border: 1.3px dashed var(--muted);
+  border-radius: 6px;
+  padding: 9px 11px;
+  margin-top: 16px;
+}
+.office-use .ou-label {
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+@media print {
+  .no-print { display: none !important; }
+
+  /* ---- Page-break hygiene ----
+     Sections stay whole when they fit; a section taller than the
+     remaining space moves to the next page. If a section is taller
+     than a full page the browser must split it — these finer rules
+     then keep each field, row, and signature block intact. */
+  .section, .field, .grid, .sign-row, .sign-field,
+  .checks, .callout, .office-use, .writein,
+  .form-masthead, .form-title {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .section-head, h2, h3 {
+    break-after: avoid;
+    page-break-after: avoid;
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  table.form-table tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  table.form-table thead {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+}

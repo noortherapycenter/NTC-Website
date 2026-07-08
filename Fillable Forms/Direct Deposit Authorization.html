@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Direct Deposit Authorization — Noor Therapy Center</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="form-styles.css"/>
+<link rel="stylesheet" href="fillable.css"/>
+<style>
+  body { margin: 0; }
+  /* ---- Roomier spacing for this form (may run to a 2nd page) ---- */
+  .form-title { margin: 26px 0 6px; }
+  .form-title p.lede { margin-top: 10px; font-size: 11.5px; }
+  .section { margin-top: 30px; }
+  .section-head { margin-bottom: 16px; }
+  .grid { gap: 20px 20px; }
+  .field { gap: 6px; }
+  .field .line { height: 28px; }
+  .checks { gap: 12px 22px; }
+  .checks.lg { gap: 16px 30px; }
+  .charboxes .cb { height: 34px; }
+  .boxfield { height: 34px; }
+  .field-gap { height: 22px !important; }
+  .callout { padding: 13px 16px; font-size: 10.5px; }
+  .sign-row { margin-top: 16px; gap: 30px; }
+  .sign-field .sig-line { height: 36px; }
+  .office-use { margin-top: 26px; padding: 13px 15px; }
+</style>
+<script src="theme-boot.js"></script>
+</head>
+<body>
+
+<doc-page size="letter" margin="0.6in">
+
+  <div slot="footer" class="form-footer">
+    <span>Noor Therapy Center · Direct Deposit Authorization</span>
+    <span class="dots">
+      <span style="background:#2aa63a"></span>
+      <span style="background:#f18a2c"></span>
+      <span style="background:#2f6fd6"></span>
+      <span style="background:#9b51c7"></span>
+      <span style="background:#e5396a"></span>
+    </span>
+    <span>Confidential · Payroll Use Only</span>
+  </div>
+
+  <!-- Masthead -->
+  <div class="form-masthead">
+    <img class="logo" src="noor-logo.png" alt="Noor Therapy Center"/>
+    <div class="form-meta">
+      <strong>Noor Therapy Center</strong><br/>
+      6250 Excelsior Blvd, Suite 102<br/>
+      St. Louis Park, MN 55416<br/>
+      (612) 703-9022 · Fax (612) 482-3186<br/>
+      info@noortherapycenter.com
+    </div>
+  </div>
+
+  <div class="form-title">
+    <div class="kicker">Payroll · Direct Deposit</div>
+    <h1>Direct Deposit Authorization</h1>
+    <p class="lede">Complete this form to have your pay deposited directly into your bank account. Please print clearly and attach a voided check or a bank-issued direct-deposit letter for each account.</p>
+  </div>
+
+  <!-- 1. Employee -->
+  <div class="section">
+    <div class="section-head">
+      <span class="section-num">1</span>
+      <h2>Employee Information</h2>
+    </div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Full Legal Name <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Employee ID (if known)</label>
+        <div class="line"></div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+    <div class="grid c3">
+      <div class="field">
+        <label>Job Title</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Work Email</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Phone</label>
+        <div class="line"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Request type -->
+  <div class="section c-orange">
+    <div class="section-head">
+      <span class="section-num">2</span>
+      <h2>Request Type</h2>
+    </div>
+    <div class="checks lg" style="gap:10px 26px">
+      <span class="check lg"><span class="box"></span>New enrollment</span>
+      <span class="check lg"><span class="box"></span>Change existing account</span>
+      <span class="check lg"><span class="box"></span>Add an additional account</span>
+      <span class="check lg"><span class="box"></span>Cancel direct deposit</span>
+    </div>
+  </div>
+
+  <!-- 3. Primary account -->
+  <div class="section c-blue">
+    <div class="section-head">
+      <span class="section-num">3</span>
+      <h2>Primary Bank Account</h2>
+      <span class="sub">Full net pay unless split below</span>
+    </div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Bank / Credit Union Name <span class="req">*</span></label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Account Type</label>
+        <div class="checks" style="height:20px;align-items:center">
+          <span class="check"><span class="box"></span>Checking</span>
+          <span class="check"><span class="box"></span>Savings</span>
+        </div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+    <div class="field col-all">
+      <label>Routing Number (9 digits) <span class="req">*</span></label>
+      <div class="charboxes">
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+    <div class="field col-all">
+      <label>Account Number <span class="req">*</span></label>
+      <div class="charboxes">
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+        <span class="cb"></span><span class="cb"></span><span class="cb"></span>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+    <div class="field" style="max-width:60%">
+      <label>Deposit Amount for This Account</label>
+      <div class="checks" style="gap:10px 20px">
+        <span class="check"><span class="box"></span>Entire net pay</span>
+        <span class="check"><span class="box"></span>Specific amount &nbsp;$ __________</span>
+        <span class="check"><span class="box"></span>Percentage &nbsp;______ %</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. Secondary account -->
+  <div class="section c-purple" style="margin-top:30px">
+    <div class="section-head">
+      <span class="section-num">4</span>
+      <h2>Secondary Account <span style="font-weight:600;text-transform:none;font-size:10px;color:var(--muted)">— optional split deposit</span></h2>
+    </div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Bank / Credit Union Name</label>
+        <div class="line"></div>
+      </div>
+      <div class="field">
+        <label>Account Type</label>
+        <div class="checks" style="height:20px;align-items:center">
+          <span class="check"><span class="box"></span>Checking</span>
+          <span class="check"><span class="box"></span>Savings</span>
+        </div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+    <div class="grid c2">
+      <div class="field">
+        <label>Routing Number</label>
+        <div class="boxfield"></div>
+      </div>
+      <div class="field">
+        <label>Account Number</label>
+        <div class="boxfield"></div>
+      </div>
+    </div>
+    <div style="height:20px"></div>
+    <div class="field" style="max-width:45%">
+      <label>Amount to This Account</label>
+      <div class="checks" style="height:20px;align-items:center">
+        <span class="check"><span class="box"></span>$ __________</span>
+        <span class="check"><span class="box"></span>______ %</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voided check callout -->
+  <div class="callout" style="margin-top:18px">
+    <strong>Attach a voided check or bank letter.</strong> To protect your pay from typos, we require a voided check (or an official direct-deposit letter from your bank) for each account listed. Tape or staple it in the space below. Do <strong>not</strong> use a deposit slip — the routing number can differ from your checks.
+  </div>
+
+  <div style="margin-top:12px;border:1.5px dashed var(--muted);border-radius:8px;height:150px;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;letter-spacing:0.1em;text-transform:uppercase;font-weight:700">
+    Attach Voided Check Here
+  </div>
+
+  <!-- 5. Authorization -->
+  <div class="section c-berry">
+    <div class="section-head">
+      <span class="section-num">5</span>
+      <h2>Authorization</h2>
+    </div>
+    <p class="fineprint" style="margin:0 0 10px">
+      I authorize Noor Therapy Center and its designated payroll provider to deposit my pay directly into the account(s) indicated above and, if necessary, to reverse or adjust entries made in error. This authorization remains in effect until I provide written notice of cancellation or change with enough time for Noor Therapy Center to act on it. I certify that I am an authorized user of the account(s) listed and that the information provided is accurate.
+    </p>
+    <div class="sign-row">
+      <div class="sign-field">
+        <div class="sig-line"></div>
+        <label>Employee Signature</label>
+      </div>
+      <div class="sign-field">
+        <div class="sig-line"></div>
+        <label>Date</label>
+      </div>
+    </div>
+  </div>
+
+  <div class="office-use">
+    <div class="ou-label">For Payroll Use Only</div>
+    <div class="grid c4">
+      <div class="field"><label>Entered By</label><div class="line"></div></div>
+      <div class="field"><label>Date Entered</label><div class="line"></div></div>
+      <div class="field"><label>Prenote Sent</label><div class="line"></div></div>
+      <div class="field"><label>Effective Pay Date</label><div class="line"></div></div>
+    </div>
+  </div>
+
+</doc-page>
+
+<script src="doc-page.js"></script>
+<script src="fillable.js"></script>
+<script src="submit.js"></script>
+</body>
+</html>
