@@ -1,4 +1,4 @@
-/* Noor Therapy Center — Admin Portal guard + shared behavior */
+/* Noor Therapy Center — Admin Portal shared behavior */
 (function () {
   'use strict';
   var KEY = 'noor-admin-auth';
@@ -26,15 +26,10 @@
     if (!document.hidden) applyTheme();
   });
 
-  // Synchronous auth check while the page is still parsing — no hidden
-  // flash, no delay for authorized users.
-  var authed = false;
-  try { authed = sessionStorage.getItem(KEY) === '1'; } catch (e) {}
-  if (!authed) {
-    document.documentElement.style.visibility = 'hidden';
-    location.replace(root + '/admin.html');
-    return;
-  }
+  // Access is enforced server-side (Netlify edge function). Reaching this
+  // page means the user passed the real password prompt, so mark the
+  // session as staff — form pages use this flag to show portal chrome.
+  try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
 
   document.addEventListener('DOMContentLoaded', function () {
     var lock = document.querySelector('.lock');
@@ -48,13 +43,11 @@
       site.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg>';
       lock.parentNode.insertBefore(site, lock);
 
-      // Lock becomes an icon button too
-      lock.title = 'Lock the portal';
-      lock.setAttribute('aria-label', 'Lock the portal');
-      lock.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>';
-      lock.classList.add('iconbtn');
+      // The old in-page lock button is obsolete — the browser holds the
+      // real (server-side) credentials until it's closed, so hide it.
+      lock.style.display = 'none';
 
-      // Dark mode toggle, inserted before the Lock button on every page
+      // Dark mode toggle
       var t = document.createElement('button');
       t.type = 'button';
       t.className = 'theme-toggle';
@@ -65,11 +58,6 @@
       });
       lock.parentNode.insertBefore(t, lock);
       applyTheme();
-
-      lock.addEventListener('click', function () {
-        try { sessionStorage.removeItem(KEY); } catch (e) {}
-        location.href = root + '/admin.html';
-      });
     }
   });
 })();
