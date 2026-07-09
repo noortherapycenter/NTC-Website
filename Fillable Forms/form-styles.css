@@ -25,7 +25,7 @@ doc-page:not(:defined) { visibility: hidden; }
 
 doc-page {
   font-family: 'DM Sans', system-ui, sans-serif;
-  color: var(--ink);
+  color: var(--ink-soft);
   font-size: 12px;
   line-height: 1.45;
 }
@@ -68,6 +68,7 @@ doc-page {
   letter-spacing: -0.02em;
   line-height: 1.05;
   margin: 0;
+  color: var(--ink);
 }
 .form-title p.lede {
   margin: 7px 0 0;
@@ -104,6 +105,7 @@ doc-page {
   letter-spacing: 0.01em;
   text-transform: uppercase;
   margin: 0;
+  color: var(--ink);
 }
 .section-head .sub {
   font-size: 9.5px;
@@ -173,7 +175,7 @@ doc-page {
 .checks { display: flex; flex-wrap: wrap; gap: 8px 18px; }
 .check {
   display: flex; align-items: center; gap: 7px;
-  font-size: 11px; color: var(--ink);
+  font-size: 11px; color: var(--ink-soft);
 }
 .check .box {
   flex: none;
@@ -209,7 +211,7 @@ doc-page {
   color: var(--ink-soft);
   line-height: 1.5;
 }
-.callout strong { color: var(--ink); }
+.callout strong { color: inherit; }
 .callout.berry  { border-left-color: var(--berry); }
 .callout.blue   { border-left-color: var(--blue); }
 
@@ -247,7 +249,7 @@ table.form-table.rows td {
 }
 table.form-table.rows td.tc { text-align: center; }
 table.form-table th.tc { text-align: center; }
-table.form-table.rows td.doc { font-weight: 600; color: var(--ink); }
+table.form-table.rows td.doc { font-weight: 600; color: var(--ink-soft); }
 table.form-table.rows tr:nth-child(even) td { background: #fbfcf9; }
 .cbox {
   display: inline-block;

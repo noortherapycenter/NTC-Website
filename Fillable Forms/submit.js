@@ -49,6 +49,23 @@
       'html[data-theme="dark"] .submit-bar .sb-note strong{color:#e9ecdd}' +
     '}' +
     '@media print{.submit-bar{display:none!important}}' +
+    /* submitted overlay */
+    '.sb-done{position:fixed;inset:0;z-index:9999;background:#fdfaf3;display:grid;place-items:center;padding:24px;font-family:"DM Sans",system-ui,sans-serif}' +
+    '.sb-done .sd-card{width:100%;max-width:440px;background:#fff;border:1.5px solid #e6e0cc;border-radius:20px;padding:44px 38px 38px;text-align:center;box-shadow:0 24px 60px -30px rgba(31,46,26,.25)}' +
+    '.sb-done .sd-check{width:64px;height:64px;border-radius:999px;background:#eef7ea;display:grid;place-items:center;margin:0 auto 18px}' +
+    '.sb-done .sd-check svg{width:30px;height:30px;color:#1f8a2e}' +
+    '.sb-done img{height:44px;margin-bottom:16px}' +
+    '.sb-done h1{font-size:24px;font-weight:800;letter-spacing:-0.02em;color:#1f2e1a;margin:0 0 8px}' +
+    '.sb-done p{font-size:13.5px;line-height:1.6;color:#6b7561;margin:0 0 24px}' +
+    '.sb-done .sd-btn{display:inline-block;font-family:inherit;font-size:14px;font-weight:800;color:#fff;background:#2aa63a;border:none;border-radius:999px;padding:13px 28px;cursor:pointer}' +
+    '.sb-done .sd-btn:hover{background:#1f8a2e}' +
+    '.sb-done .sd-stay{display:block;margin-top:14px;font-size:12.5px;font-weight:700;color:#6b7561;background:none;border:none;cursor:pointer;font-family:inherit;text-decoration:underline;margin-left:auto;margin-right:auto}' +
+    '.sb-done .sd-stay:hover{color:#1f2e1a}' +
+    '@media screen{html[data-theme="dark"] .sb-done{background:#14180f}' +
+    'html[data-theme="dark"] .sb-done .sd-card{background:#1d2316;border-color:#2f3826}' +
+    'html[data-theme="dark"] .sb-done h1{color:#e9ecdd}' +
+    'html[data-theme="dark"] .sb-done .sd-check{background:rgba(76,194,91,.16)}}' +
+    '@media print{.sb-done{display:none!important}}' +
     /* capture wrapper: hide screen-only affordances, kill fill tints */
     '.pdf-capture [data-fill]{background:transparent!important;box-shadow:none!important}' +
     '.pdf-capture .row-del,.pdf-capture .row-grip,.pdf-capture .row-del-col,.pdf-capture .add-row{display:none!important}';
@@ -82,7 +99,8 @@
         say('Sending\u2026');
         return send(blob);
       }).then(function () {
-        say('Submitted \u2014 the office has been notified.', 'ok');
+        say('', '');
+        showDone();
       }).catch(function (err) {
         say((err && err.message) || 'Something went wrong \u2014 please try again or print the form instead.', 'err');
       }).then(function () {
@@ -90,6 +108,30 @@
       });
     });
   });
+
+  /* ---------------- Submitted screen ---------------- */
+  function showDone() {
+    var ov = document.createElement('div');
+    ov.className = 'sb-done no-print';
+    ov.setAttribute('data-screen-label', 'Form submitted screen');
+    ov.innerHTML =
+      '<div class="sd-card">' +
+        '<img src="noor-logo.png" alt="Noor Therapy Center"/>' +
+        '<div class="sd-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"></path></svg></div>' +
+        '<h1>Submitted \u2014 thank you!</h1>' +
+        '<p>Your completed form has been sent to the Noor Therapy Center office. You can safely leave this page.</p>' +
+        '<button type="button" class="sd-btn">Back to previous page</button>' +
+        '<button type="button" class="sd-stay">Stay on this form</button>' +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('.sd-btn').addEventListener('click', function () {
+      if (window.history.length > 1) history.back();
+      else location.href = '../index.html';
+    });
+    ov.querySelector('.sd-stay').addEventListener('click', function () {
+      ov.remove();
+    });
+  }
 
   /* ---------------- Netlify submission ---------------- */
   function send(blob) {
@@ -204,9 +246,17 @@
       // Safe cut lines: the top of each block we must never slice through.
       var wrapRect = wrap.getBoundingClientRect();
       var cutsCss = [];
-      wrap.querySelectorAll('.section, .form-title, .form-masthead, .callout, .office-use, .sign-row, .field, .checks, table.form-table tr').forEach(function (el) {
+      wrap.querySelectorAll('.section, .form-title, .form-masthead, .callout, .office-use, .sign-row, .field, .checks, .fineprint, .writein, table.form-table tr, h3, p').forEach(function (el) {
         var r = el.getBoundingClientRect();
-        cutsCss.push(r.top - wrapRect.top);
+        var top = r.top - wrapRect.top;
+        // Never cut right after a section header — keep the header attached
+        // to its first block of content.
+        var sec = el.closest('.section');
+        if (sec && sec !== el) {
+          var st = sec.getBoundingClientRect().top - wrapRect.top;
+          if (top - st < 90) return;
+        }
+        cutsCss.push(top - 3); // cut a hair above the block so borders survive
       });
 
       return window.html2canvas(wrap, { scale: 2, backgroundColor: '#ffffff', logging: false })

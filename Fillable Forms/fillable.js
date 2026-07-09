@@ -89,6 +89,16 @@
     });
 
     enableAddRows();
+
+    // Pasted text becomes plain text — no fonts, sizes, or colors carried in.
+    document.addEventListener('paste', function (e) {
+      var t = e.target && e.target.closest ? e.target.closest('[data-fill]') : null;
+      if (!t) return;
+      e.preventDefault();
+      var text = (e.clipboardData || window.clipboardData).getData('text/plain');
+      if (!text) return;
+      document.execCommand('insertText', false, text);
+    });
   }
 
   function upgrade() {
