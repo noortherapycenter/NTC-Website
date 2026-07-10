@@ -16,14 +16,25 @@ body { margin: 0; background: #e9ece4; font-family: 'DM Sans', system-ui, sans-s
 .pf-toolbar button { font-family: inherit; font-size: 12.5px; font-weight: 700; border: none; border-radius: 999px; padding: 9px 15px; cursor: pointer; }
 .pf-toolbar .pf-back { background: #f0f0ea; color: #1f2e1a; display: inline-flex; align-items: center; gap: 6px; }
 .pf-toolbar .pf-back svg { width: 14px; height: 14px; }
-.pf-toolbar .pf-print { background: #2f6fd6; color: #fff; }
+.pf-toolbar .pf-share { background: #9b51c9; color: #fff; }
+.pf-toolbar .pf-pdf { background: #2f6fd6; color: #fff; }
+.pf-toolbar .pf-print { background: #2aa63a; color: #fff; }
 .pf-toolbar .pf-clear { background: #f0f0ea; color: #4a5545; }
+
+/* zoom + view groups */
+.pf-toolbar .pf-group { display: flex; align-items: center; gap: 2px; background: #f0f0ea; border-radius: 999px; padding: 3px; }
+.pf-toolbar .pf-group button { background: transparent; color: #1f2e1a; padding: 6px 12px; border-radius: 999px; }
+.pf-toolbar .pf-zoomg .zoom { width: 32px; padding: 6px 0; font-size: 14px; }
+.pf-toolbar .pf-zoom-val { min-width: 52px; font-variant-numeric: tabular-nums; }
+.pf-toolbar .pf-view .seg.active { background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.14); }
+@media (max-width: 760px) { .pf-toolbar .pf-zoomg { display: none; } }
 .pf-toolbar .pf-theme { background: #f0f0ea; color: #4a5545; width: 38px; padding: 9px 0; font-size: 14px; line-height: 1; }
 .pf-toolbar button:hover { filter: brightness(.95); }
 .pf-saved { font-size: 12px; font-weight: 700; color: #2aa63a; opacity: 0; transition: opacity .2s ease; }
 .pf-saved.on { opacity: 1; }
 
-#pf-pages { max-width: 900px; margin: 22px auto 60px; padding: 0 14px; display: grid; gap: 22px; }
+#pf-pages { max-width: calc(900px * var(--pf-zoom, 1)); margin: 22px auto 60px; padding: 0 14px; display: grid; gap: 22px; }
+body.pf-phone #pf-pages { max-width: none; padding: 0 6px; }
 .pf-loading { text-align: center; font-size: 13px; font-weight: 600; color: #4a5545; padding: 50px 0; }
 
 /* Save / open progress bar */
@@ -67,6 +78,19 @@ body { margin: 0; background: #e9ece4; font-family: 'DM Sans', system-ui, sans-s
 }
 @page { size: letter; margin: 0; }
 
+/* Share popover + toast */
+.share-pop { position: fixed; top: 66px; right: 16px; z-index: 90; width: min(320px, calc(100vw - 32px)); background: #fff; border: 1.5px solid #e3ddc9; border-radius: 14px; box-shadow: 0 18px 50px -18px rgba(0,0,0,.35); padding: 16px 16px 14px; font-family: 'DM Sans', system-ui, sans-serif; }
+.share-pop h4 { margin: 0 0 4px; font-size: 14px; color: #1f2e1a; }
+.share-pop p { margin: 0 0 10px; font-size: 12px; color: #6b7561; }
+.share-pop .url { width: 100%; font: 600 11.5px/1.4 ui-monospace, Menlo, monospace; color: #1f2e1a; background: #f7f4ea; border: 1.4px solid #e3ddc9; border-radius: 8px; padding: 8px 10px; margin-bottom: 10px; }
+.share-pop .row { display: flex; gap: 8px; }
+.share-pop .row button { flex: 1; font-family: inherit; font-size: 12.5px; font-weight: 700; border: none; border-radius: 9px; padding: 9px 0; cursor: pointer; background: #2aa63a; color: #fff; }
+.share-pop .row button.alt { background: #f0f0ea; color: #1f2e1a; }
+.share-pop .close { position: absolute; top: 8px; right: 10px; background: none; border: none; font-size: 18px; color: #6b7561; cursor: pointer; }
+.pf-toast { position: fixed; left: 50%; bottom: 26px; transform: translate(-50%, 12px); z-index: 95; background: #1f2e1a; color: #fdfaf3; font: 700 13px/1 'DM Sans', system-ui, sans-serif; padding: 12px 18px; border-radius: 999px; opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; }
+.pf-toast.show { opacity: 1; transform: translate(-50%, 0); }
+@media print { .share-pop, .pf-toast { display: none !important; } }
+
 /* ---- Dark mode (screen only — print / Save as PDF is always light) ---- */
 @media screen {
   html[data-theme="dark"] body { background: #14180f; }
@@ -76,6 +100,14 @@ body { margin: 0; background: #e9ece4; font-family: 'DM Sans', system-ui, sans-s
   html[data-theme="dark"] .pf-toolbar .pf-back,
   html[data-theme="dark"] .pf-toolbar .pf-clear,
   html[data-theme="dark"] .pf-toolbar .pf-theme { background: #141a0f; color: #a6b099; }
+  html[data-theme="dark"] .pf-toolbar .pf-group { background: #141a0f; }
+  html[data-theme="dark"] .pf-toolbar .pf-group button { color: #a6b099; }
+  html[data-theme="dark"] .pf-toolbar .pf-view .seg.active { background: #2f3826; color: #e9ecdd; box-shadow: none; }
+  html[data-theme="dark"] .share-pop { background: #1d2316; border-color: #2f3826; }
+  html[data-theme="dark"] .share-pop h4 { color: #e9ecdd; }
+  html[data-theme="dark"] .share-pop p, html[data-theme="dark"] .share-pop .close { color: #a6b099; }
+  html[data-theme="dark"] .share-pop .url { background: #141a0f; border-color: #2f3826; color: #e9ecdd; }
+  html[data-theme="dark"] .share-pop .row button.alt { background: #141a0f; color: #a6b099; }
   html[data-theme="dark"] .pf-loading { color: #a6b099; }
   html[data-theme="dark"] .pf-savebar { background: #1a2014; border-color: #39422c; }
   html[data-theme="dark"] .pf-savebar .fs-note { color: #a6b099; }

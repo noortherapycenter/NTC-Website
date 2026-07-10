@@ -53,15 +53,127 @@
     // “Save my progress” writes an explicit file instead
   }
 
+  /* ---------- zoom / device (screen only) ---------- */
+  var ZOOM_MIN = 0.6, ZOOM_MAX = 2, ZOOM_STEP = 0.1;
+  var zoom = 1;
+  function setZoom(z) {
+    zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round(z * 100) / 100));
+    document.documentElement.style.setProperty('--pf-zoom', zoom);
+    var val = document.querySelector('.pf-zoom-val');
+    if (val) val.textContent = Math.round(zoom * 100) + '%';
+    requestAnimationFrame(fitFonts);
+  }
+  function setDevice(mode) {
+    var phone = mode === 'phone';
+    document.body.classList.toggle('pf-phone', phone);
+    if (phone) setZoom(1);
+    document.querySelectorAll('.pf-view .seg').forEach(function (s) {
+      s.classList.toggle('active', s.getAttribute('data-view') === mode);
+    });
+    requestAnimationFrame(fitFonts);
+  }
+  function autoDevice() {
+    var small = window.matchMedia('(max-width: 760px)').matches;
+    var coarse = window.matchMedia('(pointer: coarse)').matches;
+    setDevice(small || coarse ? 'phone' : 'computer');
+  }
+
+  /* ---------- share ---------- */
+  function shareForm() {
+    var url = location.href.split('#')[0];
+    var title = CFG.title || document.title || 'Noor Therapy Center form';
+    if (navigator.share) {
+      navigator.share({ title: title, text: 'Please complete this form for Noor Therapy Center:', url: url }).catch(function () {});
+      return;
+    }
+    openSharePopover(url, title);
+  }
+  function openSharePopover(url, title) {
+    closeSharePopover();
+    var pop = document.createElement('div');
+    pop.className = 'share-pop no-print';
+    pop.innerHTML =
+      '<button class="close" data-act="x" aria-label="Close">\u00d7</button>' +
+      '<h4>Share this form</h4>' +
+      '<p>Send the link so anyone can fill it out on their phone or computer.</p>' +
+      '<input class="url" readonly value="' + url.replace(/"/g, '&quot;') + '"/>' +
+      '<div class="row">' +
+        '<button data-act="copy">Copy link</button>' +
+        '<button class="alt" data-act="email">Email</button>' +
+      '</div>';
+    document.body.appendChild(pop);
+    var input = pop.querySelector('.url');
+    input.addEventListener('focus', function () { input.select(); });
+    pop.addEventListener('click', function (e) {
+      var b = e.target.closest('button');
+      if (!b) return;
+      var act = b.getAttribute('data-act');
+      if (act === 'x') { closeSharePopover(); }
+      else if (act === 'copy') { copyText(url); toast('Link copied to clipboard'); closeSharePopover(); }
+      else if (act === 'email') {
+        window.location.href = 'mailto:?subject=' + encodeURIComponent(title) +
+          '&body=' + encodeURIComponent('Please complete this form for Noor Therapy Center:\n\n' + url);
+        closeSharePopover();
+      }
+    });
+    setTimeout(function () { document.addEventListener('click', outsideShare, true); }, 0);
+  }
+  function outsideShare(e) {
+    if (e.target.closest('.share-pop') || e.target.closest('[data-act="share"]')) return;
+    closeSharePopover();
+  }
+  function closeSharePopover() {
+    var p = document.querySelector('.share-pop');
+    if (p) p.remove();
+    document.removeEventListener('click', outsideShare, true);
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).catch(function () { legacyCopy(text); });
+    } else { legacyCopy(text); }
+  }
+  function legacyCopy(text) {
+    var t = document.createElement('textarea');
+    t.value = text; t.style.position = 'fixed'; t.style.opacity = '0';
+    document.body.appendChild(t); t.focus(); t.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    document.body.removeChild(t);
+  }
+  var toastTimer;
+  function toast(msg) {
+    var el = document.querySelector('.pf-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.className = 'pf-toast no-print';
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    requestAnimationFrame(function () { el.classList.add('show'); });
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2400);
+  }
+
   /* ---------- chrome ---------- */
   function buildChrome() {
     var bar = document.createElement('div');
-    bar.className = 'pf-toolbar no-print';    bar.innerHTML =
+    bar.className = 'pf-toolbar no-print';
+    bar.innerHTML =
       '<button type="button" class="pf-back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>Back</button>' +
       '<span class="pf-title"></span>' +
+      '<div class="pf-group pf-zoomg">' +
+        '<button type="button" class="zoom" data-act="zoom-out" title="Zoom out" aria-label="Zoom out">\u2212</button>' +
+        '<button type="button" class="pf-zoom-val" data-act="zoom-reset" title="Reset zoom">100%</button>' +
+        '<button type="button" class="zoom" data-act="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>' +
+      '</div>' +
+      '<div class="pf-group pf-view">' +
+        '<button type="button" class="seg active" data-view="computer">Computer</button>' +
+        '<button type="button" class="seg" data-view="phone">Phone</button>' +
+      '</div>' +
+      '<button type="button" class="pf-share" data-act="share">Share</button>' +
+      '<button type="button" class="pf-pdf" title="Choose &quot;Save as PDF&quot; as the destination">Download PDF</button>' +
+      '<button type="button" class="pf-print" title="Send to a printer">Print</button>' +
       '<button type="button" class="pf-theme" title="Switch to dark mode">\u263E</button>' +
-      '<button type="button" class="pf-clear">Clear</button>' +
-      '<button type="button" class="pf-print">Print / Save PDF</button>';
+      '<button type="button" class="pf-clear">Clear</button>';
     document.body.insertBefore(bar, document.body.firstChild);
     bar.querySelector('.pf-title').textContent = CFG.title || document.title;
 
@@ -72,7 +184,21 @@
       }
       location.href = '../staff-portal/forms.html';
     });
+    bar.querySelector('.pf-pdf').addEventListener('click', function () { window.print(); });
     bar.querySelector('.pf-print').addEventListener('click', function () { window.print(); });
+    bar.querySelector('.pf-share').addEventListener('click', shareForm);
+    bar.addEventListener('click', function (e) {
+      var view = e.target.closest('[data-view]');
+      if (view) { setDevice(view.getAttribute('data-view')); return; }
+      var b = e.target.closest('button[data-act]');
+      if (!b) return;
+      switch (b.getAttribute('data-act')) {
+        case 'zoom-in':    setZoom(zoom + ZOOM_STEP); break;
+        case 'zoom-out':   setZoom(zoom - ZOOM_STEP); break;
+        case 'zoom-reset': setZoom(1); break;
+      }
+    });
+    autoDevice();
 
     // Save / open progress (same affordance as the HTML forms)
     var sb = document.createElement('div');
