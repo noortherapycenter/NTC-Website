@@ -710,7 +710,7 @@
 
   var TRAINING_SHORT = {
     cultural: 'Cultural', vamr: 'VAMR', mandated: 'Mandated rep.', asdsa: 'ASD Strategies',
-    eidbi101: 'EIDBI 101', cmdeitp: 'CMDE / ITP', coord: 'Coordinating', telehealth: 'Telehealth'
+    eidbi101: 'EIDBI 101', cmdeitp: 'CMDE / ITP', coord: 'Coord. services', telehealth: 'Telehealth'
   };
   var STATUS_LABEL = { none: 'Not started', progress: 'In progress', done: 'Complete' };
 

@@ -304,3 +304,33 @@
   .tk-tablewrap { overflow: visible; border: 0; }
   .tk-due-row, .tk-list, .tk-stat, .tk-empty, .tk-note { break-inside: avoid; }
 }
+
+/* ---- Full-width layout, tracker pages only --------------------------------
+   portal.css caps .wrap, .topbar-inner and .portal-foot at 1080px, which is
+   right for the handbook and policy documents but leaves the tracker's wide
+   tables squeezed into the middle of a large monitor. Widen all three
+   together so the nav, content and footer stay aligned with each other. */
+body.tk-page .wrap.tk-wide,
+body.tk-page .topbar-inner,
+body.tk-page .portal-foot {
+  max-width: min(1800px, calc(100vw - 40px));
+}
+body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
+
+/* Long single-word headers (COORDINATING, TELEHEALTH) have no break
+   opportunity, so they used to spill over the neighbouring column. */
+.tk-matrix th.tk-vert {
+  max-width: 92px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  vertical-align: bottom;
+}
+/* With the extra room, give the matrix cells and rows more breathing space. */
+.tk-matrix td { padding: 10px 8px; }
+.tk-matrix .tk-cell { width: 34px; height: 34px; }
+
+/* Wide screens: let the dashboard tiles and due-rows use the space too. */
+@media (min-width: 1200px) {
+  body.tk-page .tk-stats { grid-template-columns: repeat(4, 1fr); }
+  body.tk-page .tk-lists { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
+}
