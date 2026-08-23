@@ -17,3 +17,9 @@
 [[edge_functions]]
   path = "/staff-portal/*"
   function = "staff-auth"
+
+# Admin Tracker sync API (Netlify Blobs). Checks the same staff cookie
+# that staff-auth.js issues, so it is protected by the portal PIN.
+[[edge_functions]]
+  path = "/api/tracker"
+  function = "tracker-data"

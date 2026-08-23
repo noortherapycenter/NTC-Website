@@ -3,9 +3,19 @@
 // server, never in the browser. A signed cookie keeps the portal unlocked
 // for 1 hour, then it asks again.
 
-const PIN = "153820";              // the 6-digit staff code
+// The PIN and the cookie signing key come from Netlify environment
+// variables — never from this file, which is in a git repo. Set both under
+// Netlify -> Site configuration -> Environment variables:
+//   STAFF_PIN             the 6-digit staff code
+//   STAFF_COOKIE_SECRET   a long random string that signs the unlock cookie
+// If either is missing the portal stays locked for everyone (fail closed).
 const HOURS = 1;                    // how long an unlock lasts
-const SECRET = "ntc-9f27c1e8b4d3a6f0-lock"; // signing key for the cookie
+
+function env(name) {
+  try { if (typeof Netlify !== "undefined" && Netlify.env) return Netlify.env.get(name); } catch (e) {}
+  try { if (typeof Deno !== "undefined" && Deno.env) return Deno.env.get(name); } catch (e) {}
+  return "";
+}
 
 // Progressive lockout: after 5 wrong tries from the same address,
 // require a 30-second wait before the next attempt. Best-effort,
@@ -16,9 +26,9 @@ const LOCK_MS = 30 * 1000;
 
 const enc = new TextEncoder();
 
-async function sign(data) {
+async function sign(data, secret) {
   const key = await crypto.subtle.importKey(
-    "raw", enc.encode(SECRET), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
   );
   const sig = await crypto.subtle.sign("HMAC", key, enc.encode(data));
   return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -105,13 +115,27 @@ function loginPage(error) {
 
 export default async (request, context) => {
   const url = new URL(request.url);
+  const PIN = env("STAFF_PIN");
+  const SECRET = env("STAFF_COOKIE_SECRET");
+
+  // Missing configuration must lock the door, not open it.
+  if (!PIN || !SECRET) {
+    return new Response(
+      "<!doctype html><meta charset=utf-8><title>Portal unavailable</title>" +
+      "<body style=\"font-family:system-ui;background:#fdfaf3;color:#1f2e1a;padding:40px\">" +
+      "<h1>Portal unavailable</h1><p>The staff code is not configured. Set " +
+      "<code>STAFF_PIN</code> and <code>STAFF_COOKIE_SECRET</code> in the Netlify " +
+      "environment variables, then redeploy.</p>",
+      { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" } }
+    );
+  }
 
   // Already unlocked? Check the signed cookie.
   const cookies = request.headers.get("cookie") || "";
   const m = cookies.match(/ntc_staff=([^;]+)/);
   if (m) {
     const parts = m[1].split(".");
-    if (parts.length === 2 && Date.now() < Number(parts[0]) && parts[1] === (await sign(parts[0]))) {
+    if (parts.length === 2 && Date.now() < Number(parts[0]) && parts[1] === (await sign(parts[0], SECRET))) {
       return context.next();
     }
   }
@@ -129,7 +153,7 @@ export default async (request, context) => {
     if (entered === PIN) {
       fails.delete(ip);
       const exp = String(Date.now() + HOURS * 3600 * 1000);
-      const cookie = `ntc_staff=${exp}.${await sign(exp)}; Path=/; Max-Age=${HOURS * 3600}; HttpOnly; Secure; SameSite=Lax`;
+      const cookie = `ntc_staff=${exp}.${await sign(exp, SECRET)}; Path=/; Max-Age=${HOURS * 3600}; HttpOnly; Secure; SameSite=Lax`;
       return new Response(null, {
         status: 303,
         headers: { Location: url.pathname, "Set-Cookie": cookie, "Cache-Control": "no-store" },

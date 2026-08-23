@@ -1,15 +1,4 @@
-# Server-side password protection (Netlify Basic-Auth).
-# Only the paths listed below require a login — the public website is unaffected.
-# CHANGE THE PASSWORD below before deploying, then keep this file out of any public repo.
-
-/admin.html
-  Basic-Auth: noorstaff:Admission1!
-
-/admin
-  Basic-Auth: noorstaff:Admission1!
-
-/admin/*
-  Basic-Auth: noorstaff:Admission1!
-
-/staff-portal/*
-  Basic-Auth: noorstaff:Admission1!
+# Access control for the admin area lives in netlify/edge-functions/staff-auth.js
+# (server-side PIN, read from the STAFF_PIN environment variable). The old
+# Basic-Auth block that used to sit here was removed: it duplicated that gate
+# and put a plaintext password in a public repo.
