@@ -123,6 +123,19 @@ export default async (request, context) => {
     );
   }
 
+  // Sign out: expire the cookie server-side, so stepping away really does
+  // end the session rather than just navigating away from the portal.
+  if (url.pathname.replace(/\/+$/, "").endsWith("/logout")) {
+    return new Response(null, {
+      status: 303,
+      headers: {
+        Location: "/index.html",
+        "Set-Cookie": "ntc_staff=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+        "Cache-Control": "no-store",
+      },
+    });
+  }
+
   // Already signed in? Check the signed cookie.
   const cookies = request.headers.get("cookie") || "";
   const m = cookies.match(/ntc_staff=([^;]+)/);

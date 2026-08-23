@@ -43,9 +43,13 @@
       site.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z"/></svg>';
       lock.parentNode.insertBefore(site, lock);
 
-      // The old in-page lock button is obsolete — the browser holds the
-      // real (server-side) credentials until it's closed, so hide it.
-      lock.style.display = 'none';
+      // Sign out is real now: the session is a cookie, and /staff-portal/logout
+      // expires it on the server. Turn the old lock button into that control.
+      lock.textContent = 'Sign out';
+      lock.title = 'End this session — the portal will ask for the password again';
+      lock.addEventListener('click', function () {
+        location.href = '/staff-portal/logout';
+      });
 
       // Dark mode toggle, inserted before the Lock button on every page
       var t = document.createElement('button');

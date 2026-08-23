@@ -24,3 +24,15 @@
   - The EIDBI training catalog in `tracker.js` (`TRAININGS`, `ROLES`) is copied from the onboarding
     packets, and required trainings are due six months after the hire date. If the onboarding pages
     change, update `TRAININGS` to match — they are the same source of truth.
+  - File checklists (`FILES`, `EMPLOYEE_DOCS`, `CLIENT_DOCS`) are copied verbatim from
+    `Fillable Forms/Employee File Checklist.html` and `Fillable Forms/Client File Checklist.html`.
+    Keep them in step. A file is stored as ONE record per person keyed by the roster id:
+    `{ id: <entityId>, docs: { <docId>: { status, date, note } } }`, status being yes/na/none.
+    "Not applicable" is excluded from the denominator, so a file can read 100% with items marked n/a.
+  - Rosters: `staff` drives training, employee files, supervision and credentials; `clients` drives
+    client files and the authorization picker. Both are plain modules — `clients` is PHI, so local
+    by default like `auths`.
+  - Sign out is real: `/staff-portal/logout` is handled by staff-auth.js and expires the cookie
+    server-side. portal.js turns the old Lock button into that control on every portal page.
+  - Removed: the CMDE/ITP due-date module. CMDE and ITP still appear as documents inside the client
+    file checklist.

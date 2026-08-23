@@ -334,3 +334,70 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
   body.tk-page .tk-stats { grid-template-columns: repeat(4, 1fr); }
   body.tk-page .tk-lists { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
 }
+
+/* ---- Tab group separators (14 sections is a lot to scan) ---- */
+.tk-tabs a.tk-sep { margin-left: 14px; position: relative; }
+.tk-tabs a.tk-sep::before {
+  content: ""; position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
+  width: 1.5px; height: 18px; background: var(--line);
+}
+
+/* ---- File checklists: roster ---- */
+.tk-filelist { display: grid; gap: 8px; }
+.tk-filerow {
+  display: flex; align-items: center; gap: 16px; text-decoration: none; color: var(--ink);
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; padding: 13px 16px;
+}
+.tk-filerow:hover { border-color: var(--green); color: var(--ink); }
+.tk-filerow .tk-progress { width: 130px; flex: 0 0 auto; order: 0; }
+.tk-filerow .tk-due-main { flex: 1; }
+
+/* ---- File checklists: one open file ---- */
+.tk-progress-lg { display: block; height: 9px; margin-bottom: 22px; }
+.tk-docs { display: grid; gap: 8px; }
+.tk-doc {
+  display: grid; grid-template-columns: 34px 1fr auto auto; align-items: center; gap: 12px;
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 12px; padding: 11px 14px;
+}
+.tk-doc.is-yes { border-color: var(--green); }
+.tk-doc.is-na { opacity: .6; }
+.tk-doc .tk-state {
+  width: 30px; height: 30px; border-radius: 9px; cursor: pointer; padding: 0;
+  font-family: inherit; font-size: 15px; font-weight: 800; line-height: 1;
+  border: 1.5px solid var(--line); background: var(--surface-2); color: var(--muted);
+}
+.tk-doc.is-yes .tk-state { background: var(--green); border-color: var(--green); color: #fff; }
+.tk-doc.is-na .tk-state { background: var(--surface-2); color: var(--ink); }
+.tk-doc .tk-state:hover { filter: brightness(.95); }
+.tk-doc-name { font-size: 13.5px; font-weight: 700; line-height: 1.35; min-width: 0; }
+.tk-doc-name small { display: block; font-weight: 500; font-size: 11.5px; color: var(--muted); }
+.tk-doc.is-yes .tk-doc-name { color: var(--ink); }
+.tk-doc-date {
+  font-family: inherit; font-size: 12.5px; color: var(--ink); width: 150px;
+  background: var(--surface-2); border: 1.5px solid var(--line); border-radius: 9px; padding: 6px 10px; outline: none;
+}
+.tk-doc-date:focus { border-color: var(--green); background: var(--surface); }
+.tk-doc .tk-itemnote { grid-column: 2 / -1; }
+
+/* ---- Notes ---- */
+.tk-notebtn.has-note { color: var(--green-dark); border-color: var(--green); }
+.tk-itemnote {
+  margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: var(--muted);
+  border-left: 2px solid var(--line); padding-left: 9px; white-space: pre-wrap;
+}
+.tk-listnote {
+  margin: 0 0 10px; font-size: 12.5px; line-height: 1.55; color: var(--muted);
+  background: var(--surface-2); border-radius: 9px; padding: 9px 12px; white-space: pre-wrap;
+}
+.tk-list li { flex-wrap: wrap; }
+.tk-list li .tk-itemnote { flex: 0 0 100%; margin-left: 25px; }
+.tk-alldone { margin: 0; font-size: 13px; font-weight: 700; color: var(--okc); }
+.tk-more { border-bottom: 0 !important; }
+.tk-more a { font-size: 12.5px; font-weight: 700; text-decoration: none; }
+
+@media (max-width: 720px) {
+  .tk-doc { grid-template-columns: 34px 1fr; }
+  .tk-doc-date { width: 100%; grid-column: 2; }
+  .tk-doc .tk-notebtn { grid-column: 2; justify-self: start; }
+  .tk-filerow .tk-progress { width: 80px; }
+}

@@ -128,6 +128,116 @@
     return staff.hireDate ? addMonths(staff.hireDate, TRAINING_WINDOW_MONTHS) : '';
   }
 
+  /* ----------------------------------------------------- file checklists
+   * Both lists are taken verbatim from the printed forms so the tracker and
+   * the paperwork cannot drift apart:
+   *   Fillable Forms/Employee File Checklist.html
+   *   Fillable Forms/Client File Checklist.html
+   * Each document is either on file, not applicable, or still outstanding.
+   */
+  var EMPLOYEE_DOCS = [
+    { group: 'Application & hiring', items: [
+      { id: 'app',        name: 'Employment application' },
+      { id: 'offer',      name: 'Signed offer letter' },
+      { id: 'resume',     name: 'Resume / CV' },
+      { id: 'diploma',    name: 'Diploma / transcripts' },
+      { id: 'id',         name: 'Copy of ID' }
+    ] },
+    { group: 'Payroll', items: [
+      { id: 'i9',         name: 'Form I-9 & supporting ID', note: 'Keep in a separate confidential folder' },
+      { id: 'w4',         name: 'Form W-4' },
+      { id: 'dd',         name: 'Direct deposit authorization' }
+    ] },
+    { group: 'Consents & acknowledgments', items: [
+      { id: 'hipaa',      name: 'Confidentiality / HIPAA agreement' },
+      { id: 'handbook',   name: 'Employee handbook acknowledgment' }
+    ] },
+    { group: 'Background checks', items: [
+      { id: 'netstudy',   name: 'NetStudy background check clearance' },
+      { id: 'bgconsent',  name: 'Background check consent' },
+      { id: 'tb',         name: 'TB test / health clearance', note: 'If required' }
+    ] },
+    { group: 'Credentials & experience', items: [
+      { id: 'license',    name: 'Copy of license / certification', note: 'BCBA, RBT, etc.' },
+      { id: 'priorhours', name: 'Supervision hours from previous center', note: 'If applicable' }
+    ] },
+    { group: 'Training certificates', items: [
+      { id: 'tl_eidbi',   name: 'TrainLink: EIDBI 101' },
+      { id: 'tl_cmde',    name: 'TrainLink: CMDE and ITP overview' },
+      { id: 'tl_cultural',name: 'TrainLink: Cultural responsiveness in ASD services' },
+      { id: 'vamr',       name: 'VAMR certificate' },
+      { id: 'mandated',   name: 'Mandated reporter training certificate' },
+      { id: 'asdsa',      name: 'ASD Strategies in Action certificates' },
+      { id: 'reqtrain',   name: 'Required trainings completed', note: 'HIPAA, safety, mandated reporter' }
+    ] },
+    { group: 'State / federal / DHS', items: [
+      { id: 'dhs4138',    name: 'DHS-4138 provider agreement' },
+      { id: 'dhs7120',    name: 'DHS-7120 assurance statement', note: 'C for QSP, D/E/F by provider level' },
+      { id: 'welcome',    name: 'DHS welcome letter' }
+    ] }
+  ];
+
+  var CLIENT_DOCS = [
+    { group: 'Starting services', items: [
+      { id: 'intake',     name: 'Intake' },
+      { id: 'insurance',  name: 'Insurance' },
+      { id: 'agreement',  name: 'Service agreement' },
+      { id: 'roi',        name: 'Release of information (ROI)' }
+    ] },
+    { group: 'Clinical', items: [
+      { id: 'cmde',       name: 'CMDE' },
+      { id: 'itp',        name: 'ITP' },
+      { id: 'iep',        name: 'IEP', note: 'If applicable' }
+    ] },
+    { group: 'Closing', items: [
+      { id: 'discharge',  name: 'Discharge', note: 'If applicable' }
+    ] }
+  ];
+
+  // A file checklist is an entity roster crossed with a document catalog.
+  // One stored record per person: { id: <entityId>, docs: { <docId>: {...} } }.
+  var FILES = {
+    empfiles: {
+      label: 'Employee Files', short: 'Employee file', color: 'orange', phi: false,
+      entity: 'staff', noun: 'employee', docs: EMPLOYEE_DOCS,
+      blurb: 'Every document HR needs on file, per employee. Mirrors the printed Employee File Checklist.'
+    },
+    clientfiles: {
+      label: 'Client Files', short: 'Client file', color: 'berry', phi: true,
+      entity: 'clients', noun: 'client', docs: CLIENT_DOCS,
+      blurb: 'Required paperwork per client, from intake through discharge. Mirrors the printed Client File Checklist.'
+    }
+  };
+
+  var FILE_STATES = { none: 'Outstanding', yes: 'On file', na: 'Not applicable' };
+
+  function fileRec(key, entityId) {
+    var r = Store.get(key, entityId);
+    return (r && !r.deletedAt) ? r : { id: entityId, docs: {} };
+  }
+  function docState(key, entityId, docId) {
+    return (fileRec(key, entityId).docs || {})[docId] || { status: 'none', date: '', note: '' };
+  }
+  // "Not applicable" is excluded from the denominator, so a file can read 100%
+  // complete even when some documents genuinely do not apply to that person.
+  function fileStats(key, entityId) {
+    var rec = fileRec(key, entityId), total = 0, done = 0, na = 0, missing = [];
+    FILES[key].docs.forEach(function (g) {
+      g.items.forEach(function (d) {
+        var st = (rec.docs || {})[d.id] || {};
+        if (st.status === 'na') { na++; return; }
+        total++;
+        if (st.status === 'yes') done++; else missing.push(d.name);
+      });
+    });
+    return { total: total, done: done, na: na, missing: missing,
+             pct: total ? Math.round((done / total) * 100) : 0 };
+  }
+  function fileProgressText(key, entityId) {
+    var s = fileStats(key, entityId);
+    return s.done + ' / ' + s.total + (s.na ? ' (' + s.na + ' n/a)' : '');
+  }
+
   /* --------------------------------------------------------------- modules */
 
   var MODULES = {
@@ -138,7 +248,7 @@
       titleOf: function (r) { return r.client || 'Untitled'; },
       sub: function (r) { return [r.payer, r.service].filter(Boolean).join(' · '); },
       fields: [
-        { k: 'client', label: 'Client name', type: 'text', required: true },
+        { k: 'client', label: 'Client', type: 'client', required: true },
         { k: 'clientId', label: 'Client / MA ID', type: 'text' },
         { k: 'payer', label: 'Payer', type: 'text', placeholder: 'UCare, BCBS, MA fee-for-service…' },
         { k: 'service', label: 'Service / code', type: 'text', placeholder: '97153, 97155…' },
@@ -165,30 +275,29 @@
       ]
     },
 
-    cmde: {
-      label: 'CMDE & ITP Due Dates', short: 'CMDE / ITP', color: 'berry', phi: true,
-      blurb: 'Evaluations, treatment plans and progress reports, by due date.',
-      dueField: 'dueDate', dueLabel: 'Due', warnAt: 30,
-      titleOf: function (r) { return (r.client || 'Untitled') + ' — ' + (r.docType || 'Document'); },
-      sub: function (r) { return r.assignedTo ? 'Assigned to ' + r.assignedTo : ''; },
+    clients: {
+      label: 'Clients', short: 'Client', color: 'berry', phi: true,
+      blurb: 'The client roster. Drives the client file checklists and the authorization list.',
+      dueField: null,
+      titleOf: function (r) { return r.name || 'Unnamed'; },
       fields: [
-        { k: 'client', label: 'Client name', type: 'text', required: true },
+        { k: 'name', label: 'Client name', type: 'text', required: true },
         { k: 'clientId', label: 'Client / MA ID', type: 'text' },
-        { k: 'docType', label: 'Document', type: 'select', required: true,
-          options: ['CMDE', 'Initial ITP', 'ITP renewal', 'Progress report', 'Reassessment', 'Other'] },
-        { k: 'dueDate', label: 'Due date', type: 'date', required: true },
-        { k: 'assignedTo', label: 'Assigned to', type: 'text' },
-        { k: 'status', label: 'Status', type: 'select',
-          options: ['Not started', 'In progress', 'Submitted', 'Approved'] },
+        { k: 'dob', label: 'Date of birth', type: 'date' },
+        { k: 'startDate', label: 'Start of services', type: 'date' },
+        { k: 'payer', label: 'Payer', type: 'text' },
+        { k: 'guardian', label: 'Parent / guardian', type: 'text' },
+        { k: 'phone', label: 'Phone', type: 'text' },
+        { k: 'active', label: 'Currently receiving services', type: 'check', default: true },
         { k: 'notes', label: 'Notes', type: 'textarea' }
       ],
       columns: [
-        { k: 'client', label: 'Client', wide: true },
-        { k: 'docType', label: 'Document' },
-        { k: 'assignedTo', label: 'Assigned to' },
-        { k: 'dueDate', label: 'Due', type: 'date' },
-        { k: 'status', label: 'Progress' },
-        { k: '_status', label: 'Status', type: 'status' }
+        { k: 'name', label: 'Client', wide: true },
+        { k: 'clientId', label: 'ID' },
+        { k: 'payer', label: 'Payer' },
+        { k: 'startDate', label: 'Started', type: 'date' },
+        { k: '_files', label: 'File', compute: function (r) { return fileProgressText('clientfiles', r.id); } },
+        { k: '_active', label: 'Status', compute: function (r) { return r.active === false ? 'Discharged' : 'Active'; } }
       ]
     },
 
@@ -213,6 +322,7 @@
         { k: '_role', label: 'Role', compute: function (r) { return roleLabel(r.role); } },
         { k: 'hireDate', label: 'Hired', type: 'date' },
         { k: '_due', label: 'Training due', type: 'date', compute: function (r) { return trainingDue(r); } },
+        { k: '_files', label: 'File', compute: function (r) { return fileProgressText('empfiles', r.id); } },
         { k: '_active', label: 'Status', compute: function (r) { return r.active === false ? 'Inactive' : 'Active'; } }
       ]
     },
@@ -292,6 +402,54 @@
         { k: 'dueDate', label: 'Due', type: 'date' },
         { k: '_status', label: 'Status', type: 'status' }
       ]
+    },
+
+    supervision: {
+      label: 'Supervision & Observation', short: 'Supervision', color: 'purple', phi: false,
+      blurb: 'QSP observation and direction. Logging a session rolls the record to its next due date.',
+      dueField: 'nextDue', dueLabel: 'Next observation', warnAt: 14, recurring: true,
+      titleOf: function (r) { return (r.staff || 'Unnamed') + ' \u2014 observation'; },
+      sub: function (r) { return r.supervisor ? 'Supervisor ' + r.supervisor : ''; },
+      fields: [
+        { k: 'staff', label: 'Staff member', type: 'staff', required: true },
+        { k: 'supervisor', label: 'Supervising QSP', type: 'staff' },
+        { k: 'repeat', label: 'Required frequency', type: 'select', required: true,
+          options: ['Weekly', 'Every 2 weeks', 'Twice a month (1st & 15th)', 'Monthly', 'Quarterly'] },
+        { k: 'nextDue', label: 'Next observation due', type: 'date', required: true },
+        { k: 'hours', label: 'Supervised hours to date', type: 'number' },
+        { k: 'notes', label: 'Notes', type: 'textarea' }
+      ],
+      columns: [
+        { k: 'staff', label: 'Staff', wide: true },
+        { k: 'supervisor', label: 'Supervisor' },
+        { k: 'repeat', label: 'Frequency' },
+        { k: 'lastDone', label: 'Last observed', type: 'date' },
+        { k: 'nextDue', label: 'Next due', type: 'date' },
+        { k: '_status', label: 'Status', type: 'status' }
+      ]
+    },
+
+    contacts: {
+      label: 'Contacts', short: 'Contact', color: 'blue', phi: false,
+      blurb: 'Payers, case managers, county workers, vendors \u2014 the numbers you keep hunting for.',
+      dueField: null,
+      titleOf: function (r) { return r.name || 'Unnamed'; },
+      fields: [
+        { k: 'name', label: 'Name', type: 'text', required: true },
+        { k: 'org', label: 'Organisation', type: 'text', placeholder: 'UCare, Hennepin County, landlord\u2026' },
+        { k: 'category', label: 'Category', type: 'select',
+          options: ['Payer', 'Case manager', 'County', 'School', 'Vendor', 'Clinical', 'Other'] },
+        { k: 'phone', label: 'Phone', type: 'text' },
+        { k: 'email', label: 'Email', type: 'text' },
+        { k: 'notes', label: 'Notes', type: 'textarea' }
+      ],
+      columns: [
+        { k: 'name', label: 'Name', wide: true },
+        { k: 'org', label: 'Organisation' },
+        { k: 'category', label: 'Category' },
+        { k: 'phone', label: 'Phone' },
+        { k: 'email', label: 'Email' }
+      ]
     }
   };
 
@@ -305,8 +463,7 @@
   }
 
   // Modules that live in their own tab but are not plain record tables.
-  var SPECIAL = { training: 1, checklists: 1 };
-  var ALL_KEYS = Object.keys(MODULES).concat(['training', 'checklists']);
+  var ALL_KEYS = Object.keys(MODULES).concat(['training', 'checklists', 'empfiles', 'clientfiles']);
 
   /* ----------------------------------------------------------------- store
    * Every module keeps a local cache in localStorage, so the page renders
@@ -556,26 +713,86 @@
     var over = items.filter(function (i) { return i.days < 0; });
     var soon = items.filter(function (i) { return i.days >= 0 && i.days <= 14; });
     var later = items.filter(function (i) { return i.days > 14; });
+    var openItems = openChecklistCount();
+    var files = incompleteFiles();
 
     var h = '<div class="tk-head"><div>' +
-      '<h2>What needs attention</h2>' +
-      '<p class="tk-sub">Everything overdue or coming up in the next ' + within + ' days, pulled from every tab.</p>' +
+      '<h2>Everything at a glance</h2>' +
+      '<p class="tk-sub">Anything overdue or due in the next ' + within + ' days, your checklists, ' +
+      'and any file still missing paperwork.</p>' +
+      '</div><div class="tk-head-actions">' +
+      '<button type="button" class="tk-btn" data-jump="reminders">+ Reminder</button>' +
+      '<button type="button" class="tk-btn" data-jump="checklists">+ Checklist</button>' +
       '</div></div>';
 
     h += '<div class="tk-stats">' +
-      statTile('Overdue', over.length, 'over') +
-      statTile('Next 14 days', soon.length, 'soon') +
-      statTile('Next ' + within + ' days', later.length, 'ok') +
-      statTile('Open checklists', openChecklistCount(), 'none') +
+      statTile('Overdue', over.length, over.length ? 'over' : 'ok') +
+      statTile('Next 14 days', soon.length, soon.length ? 'soon' : 'ok') +
+      statTile('Open checklist items', openItems, openItems ? 'soon' : 'ok') +
+      statTile('Files incomplete', files.length, files.length ? 'over' : 'ok') +
       '</div>';
 
-    if (!items.length) {
-      h += '<div class="tk-empty"><strong>Nothing due.</strong> ' +
-           'Add records in the other tabs and anything approaching its date shows up here.</div>';
-      return h;
+    h += group('Overdue', over) + group('Next 14 days', soon);
+
+    // ---- checklists, in full, because this is what gets checked daily ----
+    var lists = Store.all('checklists').sort(function (a, b) {
+      return String(a.name).localeCompare(String(b.name));
+    });
+    if (lists.length) {
+      h += '<div class="tk-group"><h3>Checklists <span>' + lists.length + '</span></h3><div class="tk-lists">';
+      lists.forEach(function (c) {
+        var all = c.items || [];
+        var done = all.filter(function (i) { return i.done; }).length;
+        var pct = all.length ? Math.round((done / all.length) * 100) : 0;
+        var open = all.filter(function (i) { return !i.done; });
+
+        h += '<section class="tk-list"><header>' +
+          '<h3>' + esc(c.name || 'Untitled') + '</h3>' +
+          '<span class="tk-count">' + done + ' / ' + all.length + '</span>' +
+          '<span class="tk-progress"><span style="width:' + pct + '%"></span></span>' +
+          '</header>';
+        if (c.note) h += '<p class="tk-listnote">' + esc(c.note) + '</p>';
+        if (!open.length) {
+          h += '<p class="tk-alldone">All done.</p>';
+        } else {
+          h += '<ul>';
+          open.slice(0, 6).forEach(function (it) {
+            h += '<li><label><input type="checkbox" data-check="' + esc(c.id) + '|' + esc(it.id) + '"/>' +
+              '<span>' + esc(it.text) + '</span></label>' +
+              (it.note ? '<p class="tk-itemnote">' + esc(it.note) + '</p>' : '') + '</li>';
+          });
+          if (open.length > 6) {
+            h += '<li class="tk-more"><a href="#checklists" data-jump="checklists">+ ' +
+                 (open.length - 6) + ' more</a></li>';
+          }
+          h += '</ul>';
+        }
+        h += '</section>';
+      });
+      h += '</div></div>';
     }
 
-    h += group('Overdue', over) + group('Next 14 days', soon) + group('Later', later);
+    // ---- files still missing paperwork ----
+    if (files.length) {
+      h += '<div class="tk-group"><h3>Files missing paperwork <span>' + files.length + '</span></h3><div class="tk-due">';
+      files.slice(0, 12).forEach(function (f) {
+        h += '<a class="tk-due-row" href="#' + esc(f.key) + ':' + esc(f.id) + '" data-jump="' + esc(f.key) + ':' + esc(f.id) + '">' +
+          '<span class="tk-pip tk-' + esc(FILES[f.key].color) + '"></span>' +
+          '<span class="tk-due-main"><strong>' + esc(f.name) + '</strong>' +
+          '<small>' + esc(f.missing.slice(0, 3).join(', ')) +
+          (f.missing.length > 3 ? ' +' + (f.missing.length - 3) + ' more' : '') + '</small></span>' +
+          '<span class="tk-due-meta"><em>' + esc(FILES[f.key].noun) + ' file</em>' + f.done + ' / ' + f.total + '</span>' +
+          '<span class="tk-badge tk-' + (f.pct >= 60 ? 'soon' : 'over') + '">' + f.pct + '%</span></a>';
+      });
+      h += '</div></div>';
+    }
+
+    h += group('Later', later);
+
+    if (!items.length && !lists.length && !files.length) {
+      h += '<div class="tk-empty"><strong>Nothing to show yet.</strong> ' +
+           'Add staff, clients, reminders or a checklist and this page fills itself in.</div>';
+    }
     return h;
 
     function group(label, list) {
@@ -592,6 +809,22 @@
       });
       return s + '</div></div>';
     }
+  }
+
+  // Anyone whose file still has outstanding documents, worst first.
+  function incompleteFiles() {
+    var out = [];
+    Object.keys(FILES).forEach(function (key) {
+      var def = FILES[key];
+      Store.all(def.entity).forEach(function (e) {
+        if (e.active === false) return;
+        var st = fileStats(key, e.id);
+        if (!st.total || !st.missing.length) return;
+        out.push({ key: key, id: e.id, name: e.name, missing: st.missing,
+                   done: st.done, total: st.total, pct: st.pct });
+      });
+    });
+    return out.sort(function (a, b) { return a.pct - b.pct; });
   }
 
   function statTile(label, n, tone) {
@@ -674,7 +907,8 @@
         }
       });
       h += '<td class="tk-actions">';
-      if (def.recurring) h += '<button type="button" class="tk-mini" data-done="' + esc(r.id) + '">Done</button>';
+      if (def.recurring) h += '<button type="button" class="tk-mini" data-done="' + esc(r.id) + '">' +
+        (mod === 'supervision' ? 'Log' : 'Done') + '</button>';
       h += '<button type="button" class="tk-mini" data-edit="' + esc(r.id) + '">Edit</button>' +
            '<button type="button" class="tk-mini tk-danger" data-del="' + esc(r.id) + '">Delete</button>' +
            '</td></tr>';
@@ -775,6 +1009,91 @@
     return h + '</tbody></table></div>';
   }
 
+  /* ---------------------------------------------------------- file checklists
+   * A 25-column matrix would be unusable, and you work one person's file at a
+   * time anyway — so this is a roster with completion bars that opens into a
+   * single grouped checklist, mirroring the printed form. The open file is
+   * held in the hash (#empfiles:<id>) so it survives a repaint and can be
+   * linked to from the dashboard.
+   */
+  function docSet(key, entityId, docId, patch) {
+    var rec = fileRec(key, entityId);
+    var docs = Object.assign({}, rec.docs || {});
+    docs[docId] = Object.assign({ status: 'none', date: '', note: '' }, docs[docId], patch);
+    Store.save(key, Object.assign({}, rec, { id: entityId, docs: docs }));
+  }
+
+  function renderFiles(key) {
+    var def = FILES[key];
+    var ents = Store.all(def.entity)
+      .filter(function (e) { return e.active !== false; })
+      .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+
+    var head = '<div class="tk-head"><div><h2>' + esc(def.label) + '</h2>' +
+      '<p class="tk-sub">' + esc(def.blurb) + '</p></div>' +
+      '<div class="tk-head-actions">' + syncChip(key) +
+      '<button type="button" class="tk-btn" data-jump="' + esc(def.entity) + '">Manage ' + esc(def.noun) + 's</button>' +
+      '</div></div>';
+
+    if (!ents.length) {
+      return head + '<div class="tk-empty"><strong>No ' + esc(def.noun) + 's yet.</strong> ' +
+        'Add them on the <a href="#' + esc(def.entity) + '" data-jump="' + esc(def.entity) + '">' +
+        esc(MODULES[def.entity].label) + '</a> tab first — each one gets its own file checklist here.</div>';
+    }
+
+    // ---- one file open ----
+    if (currentId) {
+      var ent = Store.get(def.entity, currentId);
+      if (!ent) { location.hash = key; return head; }
+      var st = fileStats(key, currentId);
+
+      var h = '<a class="page-back" href="#' + esc(key) + '" data-jump="' + esc(key) + '">&larr; All ' + esc(def.noun) + ' files</a>' +
+        '<div class="tk-head"><div><h2>' + esc(ent.name) + '</h2>' +
+        '<p class="tk-sub">' + esc(def.label) + ' &middot; ' + st.done + ' of ' + st.total + ' on file' +
+        (st.na ? ' &middot; ' + st.na + ' not applicable' : '') + '</p></div>' +
+        '<div class="tk-head-actions"><span class="tk-badge tk-' + (st.pct === 100 ? 'ok' : st.pct >= 60 ? 'soon' : 'over') + '">' +
+        st.pct + '% complete</span></div></div>' +
+        '<span class="tk-progress tk-progress-lg"><span style="width:' + st.pct + '%"></span></span>';
+
+      def.docs.forEach(function (g) {
+        h += '<div class="tk-group"><h3>' + esc(g.group) + '</h3><div class="tk-docs">';
+        g.items.forEach(function (d) {
+          var ds = docState(key, currentId, d.id);
+          var ref = esc(key + '|' + currentId + '|' + d.id);
+          h += '<div class="tk-doc is-' + esc(ds.status) + '">' +
+            '<button type="button" class="tk-state" data-cycle="' + ref + '" ' +
+              'title="' + esc(FILE_STATES[ds.status] || 'Outstanding') + ' — click to change">' +
+              (ds.status === 'yes' ? '&#10003;' : ds.status === 'na' ? '&ndash;' : '') + '</button>' +
+            '<span class="tk-doc-name">' + esc(d.name) +
+              (d.note ? '<small>' + esc(d.note) + '</small>' : '') + '</span>' +
+            '<input type="date" class="tk-doc-date" data-docdate="' + ref + '" value="' + esc(ds.date || '') + '" ' +
+              'aria-label="Date for ' + esc(d.name) + '"/>' +
+            '<button type="button" class="tk-mini tk-notebtn' + (ds.note ? ' has-note' : '') + '" ' +
+              'data-docnote="' + ref + '">' + (ds.note ? 'Note' : '+ Note') + '</button>' +
+            (ds.note ? '<p class="tk-itemnote">' + esc(ds.note) + '</p>' : '') +
+            '</div>';
+        });
+        h += '</div></div>';
+      });
+      return h;
+    }
+
+    // ---- roster ----
+    var h2 = head + '<div class="tk-filelist">';
+    ents.forEach(function (e) {
+      var st = fileStats(key, e.id);
+      var tone = st.pct === 100 ? 'ok' : st.pct >= 60 ? 'soon' : 'over';
+      h2 += '<a class="tk-filerow" href="#' + esc(key) + ':' + esc(e.id) + '" data-jump="' + esc(key) + ':' + esc(e.id) + '">' +
+        '<span class="tk-due-main"><strong>' + esc(e.name) + '</strong>' +
+        '<small>' + (st.missing.length
+            ? esc(st.missing.slice(0, 3).join(', ')) + (st.missing.length > 3 ? ' +' + (st.missing.length - 3) + ' more' : '')
+            : 'Complete') + '</small></span>' +
+        '<span class="tk-progress"><span style="width:' + st.pct + '%"></span></span>' +
+        '<span class="tk-badge tk-' + tone + '">' + st.done + ' / ' + st.total + '</span></a>';
+    });
+    return h2 + '</div>';
+  }
+
   /* ------------------------------------------------------------ checklists */
 
   function renderChecklists() {
@@ -783,7 +1102,8 @@
     });
 
     var h = '<div class="tk-head">' +
-      '<div><h2>My Checklists</h2><p class="tk-sub">Reusable lists for anything you work through step by step.</p></div>' +
+      '<div><h2>My Checklists</h2><p class="tk-sub">Reusable lists for anything you work through step by step. ' +
+      'Any item, and the list itself, can carry a note.</p></div>' +
       '<div class="tk-head-actions">' + syncChip('checklists') +
       '<button type="button" class="tk-btn tk-primary" data-newlist="1">+ New checklist</button></div></div>';
 
@@ -800,18 +1120,26 @@
 
       h += '<section class="tk-list" data-list="' + esc(c.id) + '">' +
         '<header><h3>' + esc(c.name || 'Untitled') + '</h3>' +
-        '<span class="tk-progress"><span style="width:' + pct + '%"></span></span>' +
         '<span class="tk-count">' + done + ' / ' + items.length + '</span>' +
+        '<button type="button" class="tk-mini" data-listnote="' + esc(c.id) + '">Note</button>' +
         '<button type="button" class="tk-mini" data-reset="' + esc(c.id) + '">Reset</button>' +
         '<button type="button" class="tk-mini tk-danger" data-dellist="' + esc(c.id) + '">Delete</button>' +
-        '</header><ul>';
+        '<span class="tk-progress"><span style="width:' + pct + '%"></span></span>' +
+        '</header>';
 
+      if (c.note) h += '<p class="tk-listnote">' + esc(c.note) + '</p>';
+
+      h += '<ul>';
       items.forEach(function (it) {
         h += '<li' + (it.done ? ' class="is-done"' : '') + '>' +
           '<label><input type="checkbox" data-check="' + esc(c.id) + '|' + esc(it.id) + '"' +
           (it.done ? ' checked' : '') + '/><span>' + esc(it.text) + '</span></label>' +
           (it.done && it.doneAt ? '<small>' + fmtDate(it.doneAt) + '</small>' : '') +
+          '<button type="button" class="tk-x tk-notebtn' + (it.note ? ' has-note' : '') +
+          '" data-itemnote="' + esc(c.id) + '|' + esc(it.id) + '" ' +
+          'title="' + esc(it.note ? it.note : 'Add a note') + '" aria-label="Note">&#9998;</button>' +
           '<button type="button" class="tk-x" data-delitem="' + esc(c.id) + '|' + esc(it.id) + '" aria-label="Remove item">&times;</button>' +
+          (it.note ? '<p class="tk-itemnote">' + esc(it.note) + '</p>' : '') +
           '</li>';
       });
 
@@ -839,9 +1167,9 @@
     if (f.type === 'textarea') {
       return '<div class="tk-f tk-f-wide">' + lbl + '<textarea id="' + id + '" name="' + esc(f.k) + '" rows="3">' + esc(val) + '</textarea></div>';
     }
-    if (f.type === 'select' || f.type === 'staff') {
-      var opts = f.type === 'staff'
-        ? Store.all('staff').map(function (s) { return s.name; }).sort()
+    if (f.type === 'select' || f.type === 'staff' || f.type === 'client') {
+      var opts = (f.type === 'staff' || f.type === 'client')
+        ? Store.all(f.type === 'staff' ? 'staff' : 'clients').map(function (s) { return s.name; }).sort()
         : f.options.slice();
       // roleLabel('') returns the em-dash placeholder, which would otherwise
       // get pushed in as a real selectable option on a brand-new record.
@@ -929,6 +1257,20 @@
     });
   }
 
+  function openNote(title, subtitle, currentText, save) {
+    showModal(title,
+      (subtitle ? '<p class="tk-modal-note">' + esc(subtitle) + '</p>' : '') +
+      '<div class="tk-form-grid"><div class="tk-f tk-f-wide">' +
+      '<label for="f_note">Note</label>' +
+      '<textarea id="f_note" name="note" rows="4">' + esc(currentText || '') + '</textarea>' +
+      '</div></div>',
+      function (form) {
+        save(form.elements.note.value.trim());
+        flash('Note saved.');
+        return true;
+      });
+  }
+
   /* ---------------------------------------------------------------- modals */
 
   function ensureModal() {
@@ -1013,8 +1355,8 @@
     return toISO(d);
   }
 
-  function nextOccurrence(rec) {
-    var r = rec.repeat, d = rec.dueDate;
+  function nextOccurrence(rec, dueField) {
+    var r = rec.repeat, d = rec[dueField || 'dueDate'];
     if (!d || !r || r === 'Does not repeat') return null;
     if (r === 'Weekly') return addDays(d, 7);
     if (r === 'Every 2 weeks') return addDays(d, 14);
@@ -1031,16 +1373,19 @@
     return null;
   }
 
-  function completeReminder(id) {
-    var rec = Store.get('reminders', id);
+  function completeRecurring(mod, id) {
+    var def = MODULES[mod], rec = Store.get(mod, id);
     if (!rec) return;
-    var next = nextOccurrence(rec);
+    var field = def.dueField;
+    var next = nextOccurrence(rec, field);
     if (next) {
-      Store.save('reminders', Object.assign({}, rec, { dueDate: next, lastDone: toISO(today()) }));
-      flash('Done — next one ' + fmtDate(next) + '.');
+      var patch = { lastDone: toISO(today()) };
+      patch[field] = next;
+      Store.save(mod, Object.assign({}, rec, patch));
+      flash('Logged — next one ' + fmtDate(next) + '.');
     } else {
-      Store.remove('reminders', id);
-      flash('Reminder completed and cleared.');
+      Store.remove(mod, id);
+      flash('Completed and cleared.');
     }
   }
 
@@ -1059,7 +1404,8 @@
 
     h += '<div class="tk-scopes">';
     ALL_KEYS.forEach(function (m) {
-      var def = MODULES[m] || { label: m === 'training' ? 'Staff EIDBI Training' : 'My Checklists', phi: false };
+      var def = MODULES[m] || FILES[m] ||
+        { label: m === 'training' ? 'Staff EIDBI Training' : 'My Checklists', phi: false };
       var scope = Store.scope(m);
       h += '<div class="tk-scope-row">' +
         '<div><strong>' + esc(def.label) + '</strong>' +
@@ -1114,23 +1460,30 @@
 
   var TABS = [
     { k: 'dashboard',   label: 'Dashboard' },
-    { k: 'reminders',   label: 'Reminders' },
     { k: 'checklists',  label: 'Checklists' },
-    { k: 'auths',       label: 'Client Auths' },
-    { k: 'cmde',        label: 'CMDE / ITP' },
+    { k: 'reminders',   label: 'Reminders' },
+    { k: 'clients',     label: 'Clients', sep: true },
+    { k: 'clientfiles', label: 'Client Files' },
+    { k: 'auths',       label: 'Authorizations' },
+    { k: 'staff',       label: 'Staff', sep: true },
+    { k: 'empfiles',    label: 'Employee Files' },
     { k: 'training',    label: 'Training' },
-    { k: 'staff',       label: 'Staff' },
+    { k: 'supervision', label: 'Supervision' },
     { k: 'credentials', label: 'Credentials' },
-    { k: 'renewals',    label: 'Renewals' },
+    { k: 'renewals',    label: 'Renewals', sep: true },
+    { k: 'contacts',    label: 'Contacts' },
     { k: 'settings',    label: 'Settings' }
   ];
 
-  var root, current = 'dashboard';
+  var root, current = 'dashboard', currentId = '';
 
   function currentTab() {
-    var h = (location.hash || '').replace(/^#/, '');
-    for (var i = 0; i < TABS.length; i++) if (TABS[i].k === h) return h;
-    return 'dashboard';
+    var raw = (location.hash || '').replace(/^#/, '');
+    var bits = raw.split(':');
+    for (var i = 0; i < TABS.length; i++) {
+      if (TABS[i].k === bits[0]) return { tab: bits[0], id: bits[1] || '' };
+    }
+    return { tab: 'dashboard', id: '' };
   }
 
   // Badge each tab with how many of its rows are overdue. One sweep, counted
@@ -1148,7 +1501,8 @@
     var h = '<nav class="tk-tabs" role="tablist">';
     TABS.forEach(function (t) {
       var n = counts[t.k] || 0;
-      h += '<a role="tab" href="#' + t.k + '" class="' + (t.k === current ? 'active' : '') + '">' +
+      h += '<a role="tab" href="#' + t.k + '" class="' + (t.k === current ? 'active' : '') +
+        (t.sep ? ' tk-sep' : '') + '">' +
         esc(t.label) + (n ? '<span class="tk-dot">' + n + '</span>' : '') + '</a>';
     });
     return h + '</nav>';
@@ -1159,11 +1513,14 @@
     if (current === 'settings') return renderSettings();
     if (current === 'training') return renderTraining();
     if (current === 'checklists') return renderChecklists();
+    if (FILES[current]) return renderFiles(current);
     return renderTable(current);
   }
 
   function render() {
-    current = currentTab();
+    var at = currentTab();
+    current = at.tab;
+    currentId = at.id;
 
     // A full re-render would drop the caret out of the filter box mid-typing.
     var active = document.activeElement;
@@ -1211,7 +1568,7 @@
 
       if ((el = e.target.closest('[data-add]'))) { openEditor(el.dataset.add); return; }
       if ((el = e.target.closest('[data-edit]'))) { openEditor(current, el.dataset.edit); return; }
-      if ((el = e.target.closest('[data-done]'))) { completeReminder(el.dataset.done); return; }
+      if ((el = e.target.closest('[data-done]'))) { completeRecurring(current, el.dataset.done); return; }
       if ((el = e.target.closest('[data-train]'))) {
         var p = el.dataset.train.split('|');
         openTrainingEditor(p[0], p[1]);
@@ -1238,6 +1595,50 @@
             ALL_KEYS.forEach(function (m) { try { localStorage.removeItem(LS_PREFIX + m); } catch (e) {} });
             location.reload();
           });
+        return;
+      }
+
+      // --- file checklists ---
+      if ((el = e.target.closest('[data-cycle]'))) {
+        var cy = el.dataset.cycle.split('|');
+        var order = ['none', 'yes', 'na'];
+        var now = docState(cy[0], cy[1], cy[2]).status;
+        var nextStatus = order[(order.indexOf(now) + 1) % order.length];
+        var patch = { status: nextStatus };
+        // Marking something on file without a date is the common case.
+        if (nextStatus === 'yes' && !docState(cy[0], cy[1], cy[2]).date) patch.date = toISO(today());
+        docSet(cy[0], cy[1], cy[2], patch);
+        return;
+      }
+      if ((el = e.target.closest('[data-docnote]'))) {
+        var dn = el.dataset.docnote.split('|');
+        var ent = Store.get(FILES[dn[0]].entity, dn[1]);
+        openNote('Document note', (ent && ent.name) || '', docState(dn[0], dn[1], dn[2]).note,
+          function (v) { docSet(dn[0], dn[1], dn[2], { note: v }); });
+        return;
+      }
+
+      // --- notes on checklists and their items ---
+      if ((el = e.target.closest('[data-listnote]'))) {
+        var lid = el.dataset.listnote;
+        var lc = Store.get('checklists', lid);
+        if (!lc) return;
+        openNote('Checklist note', lc.name, lc.note, function (v) {
+          Store.save('checklists', Object.assign({}, lc, { note: v }));
+        });
+        return;
+      }
+      if ((el = e.target.closest('[data-itemnote]'))) {
+        var inq = el.dataset.itemnote.split('|');
+        var ic = Store.get('checklists', inq[0]);
+        if (!ic) return;
+        var item = (ic.items || []).filter(function (x) { return x.id === inq[1]; })[0];
+        if (!item) return;
+        openNote('Item note', item.text, item.note, function (v) {
+          Store.save('checklists', Object.assign({}, ic, {
+            items: ic.items.map(function (x) { return x.id === inq[1] ? Object.assign({}, x, { note: v }) : x; })
+          }));
+        });
         return;
       }
 
@@ -1284,6 +1685,15 @@
     });
 
     root.addEventListener('change', function (e) {
+      var dd = e.target.closest('[data-docdate]');
+      if (dd) {
+        var q = dd.dataset.docdate.split('|');
+        var patch = { date: dd.value };
+        // Setting a date implies the document is in hand.
+        if (dd.value && docState(q[0], q[1], q[2]).status === 'none') patch.status = 'yes';
+        docSet(q[0], q[1], q[2], patch);
+        return;
+      }
       var box = e.target.closest('[data-check]');
       if (box) {
         var q = box.dataset.check.split('|');

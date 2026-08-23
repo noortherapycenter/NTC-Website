@@ -20,8 +20,9 @@ const MAX_BYTES = 2 * 1024 * 1024;
 
 // Modules the client is allowed to sync. Keep in step with MODULES in tracker.js.
 const ALLOWED = new Set([
-  "staff", "training", "credentials", "renewals",
-  "reminders", "checklists", "auths", "cmde",
+  "staff", "clients", "training", "credentials", "renewals",
+  "reminders", "checklists", "auths", "supervision", "contacts",
+  "empfiles", "clientfiles",
 ]);
 
 const enc = new TextEncoder();
