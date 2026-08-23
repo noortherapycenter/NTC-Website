@@ -3,10 +3,13 @@
 - The user deploys the site via GitHub Desktop (repo: noortherapycenter/NTC-Website → Netlify). Do NOT present a project ZIP after changes unless the user explicitly asks for one. When they ask, one full-project ZIP is the preferred format.
 - Fillable form text color: body/label/check text uses the gray-green (--ink-soft); only the form title (h1) and section titles (.section-head h2) are black (--ink). Keep new forms consistent with this.
 - The staff portal is protected by a Netlify edge function (netlify/edge-functions/staff-auth.js):
-  server-side 6-digit PIN, 1-hour unlock cookie, progressive lockout after 5 wrong tries.
-  The PIN and the cookie signing key are read from Netlify environment variables `STAFF_PIN` and
+  server-side username + password, 1-hour session cookie, progressive lockout after 5 wrong tries
+  (which then refuses even correct credentials until the wait expires). Credentials and the cookie
+  signing key are read from Netlify environment variables `STAFF_USER`, `STAFF_PASSWORD` and
   `STAFF_COOKIE_SECRET` — never hardcode them, this repo is public. Both edge functions fail closed
   if the variables are unset. `tracker-data.js` verifies the same cookie with the same key.
+  Username matching is case-insensitive; the password is case-sensitive; both are compared in
+  constant time. Do NOT reuse the guest WiFi password shown on the waiting-room TV slideshow.
 - Admin Tracker (`staff-portal/tracker.html` + `tracker.js` + `tracker.css`). Interactive record-keeping
   for dated work: client authorizations, CMDE/ITP due dates, staff roster, EIDBI training, credentials,
   agency renewals, recurring payroll/billing reminders, and checklists. Tabs are hash-routed (`#staff`).
