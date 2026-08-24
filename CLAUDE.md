@@ -87,10 +87,21 @@
 - Expiration notifications: `netlify/functions/notify.mjs`, a Netlify SCHEDULED function (daily
   13:00 UTC). This is the only reason the repo has a `package.json` — the site itself still has no
   build step, but a Node function needs `@netlify/blobs` installed to read the tracker's blobs.
-  - It can only notify on SHARED, non-PHI modules: staff credentials, agency renewals, and payroll
-    & billing reminders. Client authorizations, client supervision and client files are local to a
-    browser by design, so a server-side job cannot see them and an email can never carry a client
-    name. This is the trade, not a gap — do not "fix" it by sharing a PHI module.
+  - Staff and agency items (credentials, renewals, reminders) are read straight from the tracker's
+    blobs and reported whether or not anyone opens the portal.
+  - CLIENT items reach it as INITIALS, by the agency's explicit decision, through a beacon:
+    `clientAlerts()` in tracker.js reduces each client to initials IN THE BROWSER and posts
+    `{key, initials, reason, due}` to `/api/client-alerts`
+    (`netlify/edge-functions/client-alerts.js`), which the notifier folds into the digest. The
+    server therefore never holds a client name to abbreviate — only initials ever leave.
+    `reason` is one of three fixed strings, never free text, and the edge function re-validates
+    everything and DROPS what does not fit, because the browser is the part most likely to be
+    changed by someone who has not read this. The notifier validates a third time before rendering.
+    The beacon only fires when someone opens the portal, so the digest reports how stale the
+    client picture is once it is a week old. Settings can turn it off and clear what was sent.
+  - Be clear-eyed about what this is: initials plus clinical status plus a small caseload is still
+    identifying, and the digest lands in an ordinary inbox. The agency weighed that and chose it.
+    Do not widen it — no names, no notes, no dates of birth, no diagnoses, no record ids.
   - Escalation, not repetition: an item is announced when it crosses 60/30/14/7/3/1 days and then
     overdue, each step once, tracked in the `ntc-notify` blob store keyed `mod:id:dueDate` (so
     rescheduling an item legitimately re-announces it). State is only written if a channel actually

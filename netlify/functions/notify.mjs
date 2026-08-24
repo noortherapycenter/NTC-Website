@@ -140,6 +140,42 @@ async function collect(store, today) {
   return items.sort((a, b) => a.days - b.days);
 }
 
+/* Client items reach us only as a beacon: the browser reduces each client to
+ * INITIALS before sending, because the records themselves never leave it.
+ * See netlify/edge-functions/client-alerts.js. Nothing here is trusted — the
+ * same shape rules are applied again, since this data ends up in an email.
+ */
+const INITIALS = /^[A-Z][A-Z.\-]{0,4}$/;
+const REASONS = new Set(["Authorization ends", "Supervision short", "File incomplete"]);
+
+async function collectClients(state, today) {
+  let doc = null;
+  try { doc = await state.get("clientalerts", { type: "json", consistency: "strong" }); } catch (e) { return { items: [], updatedAt: 0 }; }
+  if (!doc || !Array.isArray(doc.items)) return { items: [], updatedAt: 0 };
+
+  const items = [];
+  for (const r of doc.items) {
+    const initials = String(r && r.initials || "").toUpperCase();
+    const reason = String(r && r.reason || "");
+    if (!INITIALS.test(initials) || !REASONS.has(reason)) continue;
+
+    const due = /^\d{4}-\d{2}-\d{2}$/.test(r.due || "") ? r.due : "";
+    // "File incomplete" has no deadline; treat it as due today so it is
+    // reported once and then stays quiet.
+    const days = due ? daysBetween(today, due) : 0;
+    if (days === null) continue;
+    const step = stepFor(days);
+    if (step === null) continue;
+
+    items.push({
+      key: `client:${initials}:${reason}:${due}`,
+      mod: "client", label: reason, title: initials,
+      due, days, step, client: true,
+    });
+  }
+  return { items: items.sort((a, b) => a.days - b.days), updatedAt: doc.updatedAt || 0 };
+}
+
 /* ---------------------------------------------------------------- delivery */
 
 async function sendEmail(subject, html, text) {
@@ -220,19 +256,33 @@ async function sendWebhook(payload) {
 
 /* ------------------------------------------------------------- the message */
 
-function render(items, portalUrl) {
+function render(items, portalUrl, beaconAgeDays) {
   const overdue = items.filter((i) => i.days < 0);
   const today = items.filter((i) => i.days === 0);
   const soon = items.filter((i) => i.days > 0);
+  const anyClient = items.some((i) => i.client);
 
-  const line = (i) => `${i.title} — ${i.label.toLowerCase()} ${fmtDate(i.due)} (${relative(i.days)})`;
+  // A client row is initials and a reason, nothing else. A staff row can say
+  // what it likes — it is not about a client.
+  const line = (i) => i.client
+    ? (i.due ? `${i.title} — ${i.label.toLowerCase()} ${fmtDate(i.due)} (${relative(i.days)})`
+             : `${i.title} — ${i.label.toLowerCase()}`)
+    : `${i.title} — ${i.label.toLowerCase()} ${fmtDate(i.due)} (${relative(i.days)})`;
+
+  const staleNote = !anyClient ? ""
+    : beaconAgeDays === null
+      ? "Client items come from the portal and have not been refreshed yet."
+      : beaconAgeDays >= 7
+        ? `Client items are as of ${beaconAgeDays} days ago — they refresh when someone opens the portal.`
+        : "";
 
   const text = [
     overdue.length ? `OVERDUE (${overdue.length})\n` + overdue.map((i) => "  • " + line(i)).join("\n") : "",
-    today.length ? `DUE TODAY (${today.length})\n` + today.map((i) => "  • " + line(i)).join("\n") : "",
+    today.length ? `NEEDS ATTENTION (${today.length})\n` + today.map((i) => "  • " + line(i)).join("\n") : "",
     soon.length ? `COMING UP (${soon.length})\n` + soon.map((i) => "  • " + line(i)).join("\n") : "",
     `\nOpen the tracker: ${portalUrl}`,
-    "\nClient authorizations and client supervision are not included — that data stays in the browser and never reaches this job.",
+    staleNote ? "\n" + staleNote : "",
+    "\nClients appear as initials only. Open the tracker to see who.",
   ].filter(Boolean).join("\n\n");
 
   const group = (name, list, tone) => !list.length ? "" :
@@ -240,9 +290,9 @@ function render(items, portalUrl) {
     `<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">` +
     list.map((i) => `<tr>
         <td style="padding:9px 0;border-bottom:1px solid #e6e0cc;font:600 14px/1.4 system-ui,sans-serif;color:#1f2e1a">
-          ${esc(i.title)}
+          ${esc(i.title)}${i.client ? '<span style="font:700 10px/1 system-ui,sans-serif;letter-spacing:.1em;text-transform:uppercase;color:#b31e48;background:#fce8ef;border-radius:999px;padding:3px 7px;margin-left:7px">client</span>' : ""}
           <div style="font:500 12.5px/1.5 system-ui,sans-serif;color:#6b7561;margin-top:2px">
-            ${esc(i.label)} ${esc(fmtDate(i.due))} · ${esc(relative(i.days))}
+            ${esc(i.label)}${i.due ? " " + esc(fmtDate(i.due)) + " · " + esc(relative(i.days)) : ""}
           </div>
         </td></tr>`).join("") +
     `</table>`;
@@ -254,14 +304,15 @@ function render(items, portalUrl) {
       ${overdue.length ? `<strong style="color:#d64545">${overdue.length} overdue.</strong> ` : ""}${items.length} item${items.length === 1 ? "" : "s"} crossed a deadline threshold.
     </p>
     ${group("Overdue", overdue, "#d64545")}
-    ${group("Due today", today, "#b25f10")}
+    ${group("Needs attention", today, "#b25f10")}
     ${group("Coming up", soon, "#6b7561")}
     <p style="margin:28px 0 0">
       <a href="${esc(portalUrl)}" style="display:inline-block;font:800 14px/1 system-ui,sans-serif;color:#fff;background:#2aa63a;border-radius:999px;padding:13px 26px;text-decoration:none">Open the tracker</a>
     </p>
+    ${staleNote ? `<p style="font:600 12px/1.6 system-ui,sans-serif;color:#b25f10;margin:18px 0 0">${esc(staleNote)}</p>` : ""}
     <p style="font:500 11.5px/1.6 system-ui,sans-serif;color:#8a9182;margin:24px 0 0;border-top:1px solid #e6e0cc;padding-top:14px">
-      Client authorizations and client supervision are deliberately not included: that data stays in
-      the browser it was entered on, so this message can never carry a client name.
+      Clients are shown as initials only — open the tracker to see who. This message still concerns
+      client care: treat it as confidential, and do not forward it outside the agency.
     </p>
   </div>`;
 
@@ -304,7 +355,15 @@ export default async (req) => {
   const tracker = getStore(TRACKER_STORE);
   const state = getStore(STATE_STORE);
 
-  const items = await collect(tracker, today);
+  const beacon = await collectClients(state, today);
+  const items = [...(await collect(tracker, today)), ...beacon.items]
+    .sort((a, b) => a.days - b.days);
+
+  // How old the client picture is. It only refreshes when somebody opens the
+  // portal, so a stale figure has to be shown rather than implied to be live.
+  const beaconAgeDays = beacon.updatedAt
+    ? Math.floor((Date.now() - beacon.updatedAt) / 86400000)
+    : null;
 
   let sent = {};
   try { sent = (await state.get(STATE_KEY, { type: "json" })) || {}; } catch (e) { sent = {}; }
@@ -319,7 +378,7 @@ export default async (req) => {
     return Response.json({ ok: true, today, checked: items.length, sent: 0, note: "nothing new" });
   }
 
-  const msg = render(fresh, portalUrl);
+  const msg = render(fresh, portalUrl, beaconAgeDays);
   const delivery = {};
 
   if (dry) {

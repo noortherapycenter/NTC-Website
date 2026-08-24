@@ -18,6 +18,7 @@
   var LS_SCOPE = 'noor-tracker-scope';
   var LS_PHI_FIX = 'noor-tracker-phi-fix';
   var LS_RETIRED = 'noor-tracker-retired';
+  var LS_BEACON = 'noor-tracker-beacon';
   var API = '/api/tracker';
 
   /* Modules that used to exist. Leaving their records behind would mean staff
@@ -1890,23 +1891,39 @@
     });
     h += '</div>';
 
-    /* Notifications. What this panel mostly does is state the limit, because
-     * the limit is not guessable: a scheduled job runs on a server and can
-     * only read what has been shared to it, so the client tabs — which never
-     * leave the browser — cannot be part of an email. Somebody who assumed
-     * otherwise would trust an alert that was never coming. */
+    /* Notifications. The client half of this panel is worth its length: what
+     * leaves the browser, and what it is still capable of revealing, is not
+     * guessable from the outside — and it is the kind of thing a compliance
+     * review will ask about. */
+    var beaconOff = false;
+    try { beaconOff = localStorage.getItem(LS_BEACON) === 'off'; } catch (e) {}
+    var pending = beaconOff ? 0 : clientAlerts().length;
+
     h += '<div class="tk-group"><h3>Notifications</h3>' +
       '<p class="tk-sub">A daily job emails whatever has just crossed a deadline — 60, 30, 14, 7, 3 ' +
       'and 1 day out, then overdue. Each step is announced once, so nothing repeats at you every ' +
       'morning until it is dealt with.</p>' +
       '<div class="tk-scopes">' +
-        '<div class="tk-scope-row"><div><strong>Included</strong>' +
-          '<small>Staff credentials, agency renewals, payroll &amp; billing reminders.</small></div></div>' +
-        '<div class="tk-scope-row"><div><strong>Not included</strong>' +
+        '<div class="tk-scope-row"><div><strong>Staff and agency</strong>' +
+          '<small>Credentials, renewals, payroll &amp; billing reminders. These are stored on the ' +
+          'server, so they are reported whether or not anyone opens this page.</small></div></div>' +
+        '<div class="tk-scope-row"><div><strong>Clients — initials only</strong>' +
           '<span class="tk-tag-phi">contains client data</span>' +
-          '<small>Client authorizations, client supervision and client files stay on the browser ' +
-          'they were entered on, so the job that sends the email cannot read them — and an email ' +
-          'could never carry a client name. Those show on the dashboard instead.</small></div></div>' +
+          '<small>Client records never leave this browser, so it sends the notifier just the ' +
+          'initials, one of three fixed reasons, and a date — never a name, note or record. ' +
+          'Sent when someone opens the portal; between visits the notifier reuses the last ' +
+          'picture and says how old it is.<br>' +
+          '<strong>Initials attached to clinical status can still identify someone in a caseload ' +
+          'this size.</strong> The email is confidential and should not be forwarded outside the ' +
+          'agency.' +
+          (beaconOff ? '' : ' Currently sending <strong>' + pending + '</strong> item' +
+            (pending === 1 ? '' : 's') + '.') +
+          '</small></div>' +
+          '<div class="tk-head-actions">' +
+            (beaconOff ? '' : '<button type="button" class="tk-btn tk-x" data-beaconwipe="1">Clear what was sent</button>') +
+            '<button type="button" class="tk-btn tk-toggle" data-beacon="1">' +
+            (beaconOff ? 'Turn on' : 'Turn off') + '</button>' +
+          '</div></div>' +
       '</div>' +
       '<p class="tk-sub" style="margin-top:12px">Set up in Netlify under Site configuration &rarr; ' +
       'Environment variables: <code>NOTIFY_TO</code> and one of <code>RESEND_API_KEY</code> or ' +
@@ -2131,6 +2148,37 @@
         openTrainingEditor(p[0], p[1]);
         return;
       }
+      if ((el = e.target.closest('[data-beacon]'))) {
+        var boff = false;
+        try { boff = localStorage.getItem(LS_BEACON) === 'off'; } catch (e2) {}
+        if (boff) {
+          try { localStorage.removeItem(LS_BEACON); } catch (e2) {}
+          sendBeacon();
+          flash('Client items will be included, as initials.');
+          render();
+        } else {
+          confirmModal('Stop sending client initials?',
+            'Client items drop out of the email. Staff credentials, renewals and reminders carry on. ' +
+            'Anything already sent stays on the server until you clear it.',
+            'Turn off', function () {
+              try { localStorage.setItem(LS_BEACON, 'off'); } catch (e2) {}
+              flash('Client items will no longer be sent.');
+              render();
+            });
+        }
+        return;
+      }
+      if ((el = e.target.closest('[data-beaconwipe]'))) {
+        confirmModal('Clear the initials already sent?',
+          'Deletes what the notifier is holding, so the next email has no client items until ' +
+          'someone opens the portal again. Your records here are untouched.',
+          'Clear it', function () {
+            fetch('/api/client-alerts', { method: 'DELETE' })
+              .then(function () { flash('Cleared.'); })
+              .catch(function () { flash('Could not reach the server.', true); });
+          });
+        return;
+      }
       if ((el = e.target.closest('[data-purge]'))) {
         var pm = el.dataset.purge, pl = defOf(pm).label || pm;
         confirmModal('Clear the server copy of ' + esc(pl) + '?',
@@ -2340,6 +2388,84 @@
 
   /* ------------------------------------------------------------------ boot */
 
+  /* ------------------------------------------------------ client beacon
+   *
+   * Client records never leave this browser, so the daily notifier cannot see
+   * that an authorization is about to lapse. This sends it the little it needs
+   * to say so: the client's INITIALS, a fixed reason code, and the date.
+   *
+   * The full name is reduced to initials HERE, before anything is sent — so
+   * the server never holds a client name to abbreviate later. Nothing else
+   * goes: no notes, no service codes, no record ids that could be looked up.
+   * /api/client-alerts independently drops anything that is not this shape.
+   *
+   * It fires when someone opens the portal, which is the only moment this data
+   * is readable. If nobody opens it for three weeks, the notifier keeps using
+   * the last picture it was given and says how old that is.
+   */
+  function initialsOf(name) {
+    var parts = String(name || '').trim().split(/[\s,]+/).filter(Boolean);
+    if (!parts.length) return '';
+    var letters = parts.slice(0, 2).map(function (p) {
+      var m = /[A-Za-z]/.exec(p);
+      return m ? m[0].toUpperCase() : '';
+    }).filter(Boolean);
+    if (!letters.length) return '';
+    return letters.join('.') + '.';
+  }
+
+  function clientAlerts() {
+    var out = [];
+    var seen = {};
+    function push(id, initials, reason, due) {
+      if (!initials) return;
+      var key = reason.replace(/\s+/g, '') + ':' + id + ':' + (due || '');
+      if (seen[key]) return;
+      seen[key] = 1;
+      out.push({ key: key, initials: initials, reason: reason, due: due || '' });
+    }
+
+    // Authorizations coming to an end.
+    var authDef = MODULES.auths;
+    Store.all('auths').forEach(function (r) {
+      var due = r[authDef.dueField];
+      var days = daysUntil(due);
+      if (days == null || days > (authDef.warnAt || 45)) return;
+      push(r.id, initialsOf(r.client), 'Authorization ends', due);
+    });
+
+    // Supervision months that closed under the requirement.
+    supShortfalls().forEach(function (r) {
+      push(r.id, initialsOf(r.client), 'Supervision short', monthEnd(r.month));
+    });
+
+    // Client files still missing paperwork.
+    Store.all('clients').forEach(function (c) {
+      if (c.active === false) return;
+      var st = fileStats('clientfiles', c.id);
+      if (!st.total || !st.missing.length) return;
+      push(c.id, initialsOf(c.name), 'File incomplete', '');
+    });
+
+    return out;
+  }
+
+  function sendBeacon() {
+    if (embedded) return;                       // one sender per visit
+    var off = false;
+    try { off = localStorage.getItem(LS_BEACON) === 'off'; } catch (e) {}
+    if (off) return;
+
+    var items = clientAlerts();
+    fetch('/api/client-alerts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: items })
+      // Silent on failure: this is a courtesy to the notifier, not something
+      // the person using the tracker should be interrupted about.
+    }).catch(function () {});
+  }
+
   /* Apply anything the fillable forms left behind.
    *
    * A form cannot write to /api/tracker itself — this file owns the sync
@@ -2399,7 +2525,9 @@
       pending = setTimeout(render, 40);
     });
 
-    Store.pullAll();
+    // Send after the first sync, so the picture includes other people's edits
+    // rather than only what this browser happened to have cached.
+    Store.pullAll().then(sendBeacon);
 
     // Pick up other people's edits while the tab is open.
     setInterval(function () { if (!document.hidden) Store.pullAll(); }, 60000);

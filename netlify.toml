@@ -30,3 +30,11 @@
 [[edge_functions]]
   path = "/api/documents"
   function = "documents"
+
+# Client alert beacon. The browser posts initials + a fixed reason code for
+# client items needing attention, so the scheduled notifier can include them
+# without client records ever being stored on the server. The function drops
+# anything that is not initials-shaped — see the file header.
+[[edge_functions]]
+  path = "/api/client-alerts"
+  function = "client-alerts"
