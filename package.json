@@ -1,0 +1,8 @@
+{
+  "name": "ntc-website",
+  "private": true,
+  "description": "Noor Therapy Center website. The site itself has no build step — netlify.toml publishes the repo root as-is. This file exists so the scheduled notifier in netlify/functions/ can depend on @netlify/blobs; Netlify installs it at deploy time and bundles it into the function.",
+  "dependencies": {
+    "@netlify/blobs": "^11.0.0"
+  }
+}

@@ -16,7 +16,20 @@
 
   var LS_PREFIX = 'noor-tracker:';
   var LS_SCOPE = 'noor-tracker-scope';
+  var LS_PHI_FIX = 'noor-tracker-phi-fix';
+  var LS_RETIRED = 'noor-tracker-retired';
   var API = '/api/tracker';
+
+  /* Modules that used to exist. Leaving their records behind would mean staff
+   * names sitting in storage nothing reads any more, so each is cleared once —
+   * locally, and on the server — the first time this version runs. The keys
+   * stay in the edge function's allowlist purely so that DELETE can reach
+   * them; nothing writes to them again. */
+  var RETIRED_KEYS = ['supervision'];
+
+  // Modules pulled back to this device by the one-time PHI scope repair,
+  // reported once on the dashboard so the change is not silent.
+  var phiRepaired = [];
 
   /* ---------------------------------------------------------------- utils */
 
@@ -211,6 +224,16 @@
 
   var FILE_STATES = { none: 'Outstanding', yes: 'On file', na: 'Not applicable' };
 
+  /* Definition lookup across BOTH registries.
+   *
+   * File checklists live in FILES, not MODULES, so anything that reached for
+   * MODULES[key] alone saw `undefined` for empfiles/clientfiles — which meant
+   * clientfiles.phi (true) was ignored: it defaulted to SHARED and skipped the
+   * PHI confirmation. Every scope decision goes through here now. */
+  function defOf(key) {
+    return MODULES[key] || FILES[key] || SUPS[key] || {};
+  }
+
   function fileRec(key, entityId) {
     var r = Store.get(key, entityId);
     return (r && !r.deletedAt) ? r : { id: entityId, docs: {} };
@@ -236,6 +259,102 @@
   function fileProgressText(key, entityId) {
     var s = fileStats(key, entityId);
     return s.done + ' / ' + s.total + (s.na ? ' (' + s.na + ' n/a)' : '');
+  }
+
+  /* ------------------------------------------------- client supervision
+   * Monthly supervision compliance, one record per client per month, laid
+   * out like the clinical supervision report it replaces: direct therapy
+   * hours drive the hours REQUIRED, the session log drives the hours
+   * actually PROVIDED, and the gap between them is the thing to catch
+   * before the month closes rather than after.
+   *
+   * One hour of supervision per SUP_RATIO hours of direct therapy. Checked
+   * against the June 2026 report: 177h58m direct required 11h07m of
+   * supervision, which is 1:16 to the minute.
+   */
+  var SUP_RATIO = 16;
+  var SUP_CODES = ['H0032', '97155', '97156', 'Other'];
+  var SUP_LOCATIONS = ['Home', 'Center', 'School', 'Other'];
+
+  var SUPS = {
+    clientsup: {
+      label: 'Client Supervision', short: 'Supervision month', color: 'berry', phi: true,
+      entity: 'clients', noun: 'client',
+      blurb: 'Supervision required vs. provided, per client per month. Required hours are computed ' +
+             'from direct therapy at 1 hour per ' + SUP_RATIO + '.'
+    }
+  };
+
+  // 667 -> "11 hrs 7 mins". Whole hours and whole minutes read better here
+  // than a decimal, because that is how the report and the payer state it.
+  function hm(mins) {
+    var m = Math.max(0, Math.round(mins || 0));
+    var h = Math.floor(m / 60), r = m % 60;
+    if (!h && !r) return '0 mins';
+    if (!h) return r + (r === 1 ? ' min' : ' mins');
+    if (!r) return h + (h === 1 ? ' hr' : ' hrs');
+    return h + (h === 1 ? ' hr ' : ' hrs ') + r + (r === 1 ? ' min' : ' mins');
+  }
+
+  // "HH:MM" from <input type="time">, in local wall-clock terms.
+  function minsBetween(a, b) {
+    var pa = /^(\d{1,2}):(\d{2})$/.exec(a || '');
+    var pb = /^(\d{1,2}):(\d{2})$/.exec(b || '');
+    if (!pa || !pb) return 0;
+    var n = (+pb[1] * 60 + +pb[2]) - (+pa[1] * 60 + +pa[2]);
+    // An end before the start is a typo, not a negative session.
+    return n > 0 ? n : 0;
+  }
+
+  function fmtTime(s) {
+    var p = /^(\d{1,2}):(\d{2})$/.exec(s || '');
+    if (!p) return '—';
+    var h = +p[1], ap = h < 12 ? 'am' : 'pm';
+    return ((h % 12) || 12) + ':' + p[2] + ap;
+  }
+
+  // Month is stored as YYYY-MM, the value an <input type="month"> gives back.
+  function monthLabel(s) {
+    var p = /^(\d{4})-(\d{2})$/.exec(s || '');
+    if (!p) return '—';
+    return new Date(+p[1], +p[2] - 1, 1)
+      .toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  }
+  function monthStart(s) {
+    var p = /^(\d{4})-(\d{2})$/.exec(s || '');
+    return p ? p[1] + '-' + p[2] + '-01' : '';
+  }
+  function monthEnd(s) {
+    var p = /^(\d{4})-(\d{2})$/.exec(s || '');
+    if (!p) return '';
+    return toISO(new Date(+p[1], +p[2], 0));
+  }
+  function thisMonth() {
+    var n = new Date();
+    return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
+  }
+
+  function supStats(r) {
+    var direct = Math.max(0, Math.round(+(r && r.directMin) || 0));
+    var required = Math.round(direct / SUP_RATIO);
+    var provided = ((r && r.sessions) || []).reduce(function (n, s) {
+      return n + minsBetween(s.start, s.end);
+    }, 0);
+    return {
+      direct: direct, required: required, provided: provided,
+      short: Math.max(0, required - provided),
+      pct: required ? Math.min(100, Math.round((provided / required) * 100)) : 100
+    };
+  }
+
+  // A month still running is "in progress", not yet a shortfall to answer for.
+  function supOpen(r) {
+    var end = monthEnd(r && r.month);
+    return !end || daysUntil(end) >= 0;
+  }
+
+  function supTitle(r) {
+    return (r.client || 'Unnamed client') + ' — ' + monthLabel(r.month);
   }
 
   /* --------------------------------------------------------------- modules */
@@ -404,30 +523,11 @@
       ]
     },
 
-    supervision: {
-      label: 'Supervision & Observation', short: 'Supervision', color: 'purple', phi: false,
-      blurb: 'QSP observation and direction. Logging a session rolls the record to its next due date.',
-      dueField: 'nextDue', dueLabel: 'Next observation', warnAt: 14, recurring: true,
-      titleOf: function (r) { return (r.staff || 'Unnamed') + ' \u2014 observation'; },
-      sub: function (r) { return r.supervisor ? 'Supervisor ' + r.supervisor : ''; },
-      fields: [
-        { k: 'staff', label: 'Staff member', type: 'staff', required: true },
-        { k: 'supervisor', label: 'Supervising QSP', type: 'staff' },
-        { k: 'repeat', label: 'Required frequency', type: 'select', required: true,
-          options: ['Weekly', 'Every 2 weeks', 'Twice a month (1st & 15th)', 'Monthly', 'Quarterly'] },
-        { k: 'nextDue', label: 'Next observation due', type: 'date', required: true },
-        { k: 'hours', label: 'Supervised hours to date', type: 'number' },
-        { k: 'notes', label: 'Notes', type: 'textarea' }
-      ],
-      columns: [
-        { k: 'staff', label: 'Staff', wide: true },
-        { k: 'supervisor', label: 'Supervisor' },
-        { k: 'repeat', label: 'Frequency' },
-        { k: 'lastDone', label: 'Last observed', type: 'date' },
-        { k: 'nextDue', label: 'Next due', type: 'date' },
-        { k: '_status', label: 'Status', type: 'status' }
-      ]
-    },
+    /* The staff "Supervision & Observation" module was removed: the note-taking
+     * software already tracks QSP observation of staff, and a second place to
+     * record it is a second place to keep in step. RETIRED_KEYS below clears
+     * what it left behind. Client supervision (SUPS.clientsup) is unrelated and
+     * stays \u2014 that one tracks required vs. provided hours per client. */
 
     contacts: {
       label: 'Contacts', short: 'Contact', color: 'blue', phi: false,
@@ -463,7 +563,10 @@
   }
 
   // Modules that live in their own tab but are not plain record tables.
-  var ALL_KEYS = Object.keys(MODULES).concat(['training', 'checklists', 'empfiles', 'clientfiles']);
+  var ALL_KEYS = Object.keys(MODULES)
+    .concat(['training', 'checklists'])
+    .concat(Object.keys(FILES))
+    .concat(Object.keys(SUPS));
 
   /* ----------------------------------------------------------------- store
    * Every module keeps a local cache in localStorage, so the page renders
@@ -479,9 +582,10 @@
     var statusNote = {};   // module -> last error message
 
     function defaultScope(mod) {
-      var def = MODULES[mod];
-      // Client-identifying modules stay on this device unless told otherwise.
-      return def && def.phi ? 'local' : 'shared';
+      // defOf, not MODULES — file checklists and supervision months live in
+      // their own registries, and reading MODULES alone silently dropped
+      // their phi flag.
+      return defOf(mod).phi ? 'local' : 'shared';
     }
 
     function loadScopes() {
@@ -490,6 +594,23 @@
       ALL_KEYS.forEach(function (m) {
         scopes[m] = saved[m] === 'local' || saved[m] === 'shared' ? saved[m] : defaultScope(m);
       });
+
+      // One-time repair. Browsers that ran the version where defaultScope
+      // could not see FILES have clientfiles saved as 'shared'. That choice
+      // was never made deliberately — no PHI prompt was ever shown — so pull
+      // every PHI module back to this device. Re-sharing is still possible,
+      // it just has to go through the prompt now.
+      var repaired = [];
+      try {
+        if (!localStorage.getItem(LS_PHI_FIX)) {
+          ALL_KEYS.forEach(function (m) {
+            if (defOf(m).phi && scopes[m] === 'shared') { scopes[m] = 'local'; repaired.push(m); }
+          });
+          localStorage.setItem(LS_PHI_FIX, '1');
+          if (repaired.length) saveScopes();
+        }
+      } catch (e) {}
+      phiRepaired = repaired;
     }
     function saveScopes() {
       try { localStorage.setItem(LS_SCOPE, JSON.stringify(scopes)); } catch (e) {}
@@ -576,6 +697,28 @@
 
 
     return {
+      // Clear anything a removed module left behind, once.
+      sweepRetired: function () {
+        var done = false;
+        try { done = !!localStorage.getItem(LS_RETIRED); } catch (e) {}
+        if (done) return Promise.resolve(0);
+
+        var hit = [];
+        RETIRED_KEYS.forEach(function (m) {
+          try {
+            if (localStorage.getItem(LS_PREFIX + m) != null) hit.push(m);
+            localStorage.removeItem(LS_PREFIX + m);
+          } catch (e) {}
+        });
+        try { localStorage.setItem(LS_RETIRED, '1'); } catch (e) {}
+
+        // Best effort: an offline browser simply sweeps again next time, so
+        // the flag is only set above once the local half has succeeded.
+        return Promise.all(RETIRED_KEYS.map(function (m) {
+          return api({ url: API + '?module=' + encodeURIComponent(m), init: { method: 'DELETE' } })
+            .catch(function () { return null; });
+        })).then(function () { return hit.length; });
+      },
       init: function () {
         loadScopes();
         ALL_KEYS.forEach(function (m) {
@@ -619,6 +762,12 @@
         merge(mod, [{ id: id, deletedAt: Date.now(), updatedAt: Date.now() }]);
         emit(mod);
         push(mod, [], [id]);
+      },
+      // Delete the server's copy of a module without touching this browser's.
+      // The response is deliberately not merged: merging would pull the very
+      // records we just removed back into the local cache.
+      purgeServer: function (mod) {
+        return api({ url: API + '?module=' + encodeURIComponent(mod), init: { method: 'DELETE' } });
       },
       pull: pull,
       pullAll: function () {
@@ -725,14 +874,40 @@
       '<button type="button" class="tk-btn" data-jump="checklists">+ Checklist</button>' +
       '</div></div>';
 
+    var supShort = supShortfalls();
+
+    // The scope repair moved data without being asked. Say so, once.
+    if (phiRepaired.length) {
+      h += '<p class="tk-note tk-note-warn"><strong>Client data was pulled back to this browser.</strong> ' +
+        esc(phiRepaired.map(function (m) { return defOf(m).label || m; }).join(', ')) +
+        ' had been syncing to the server because of a bug — the prompt warning that this is protected ' +
+        'health information never appeared. New edits stay on this device. Copies already uploaded are ' +
+        'still on the server: clear them from <a href="#settings" data-jump="settings">Settings</a>.</p>';
+    }
+
     h += '<div class="tk-stats">' +
       statTile('Overdue', over.length, over.length ? 'over' : 'ok') +
       statTile('Next 14 days', soon.length, soon.length ? 'soon' : 'ok') +
       statTile('Open checklist items', openItems, openItems ? 'soon' : 'ok') +
       statTile('Files incomplete', files.length, files.length ? 'over' : 'ok') +
+      statTile('Supervision short', supShort.length, supShort.length ? 'over' : 'ok') +
       '</div>';
 
     h += group('Overdue', over) + group('Next 14 days', soon);
+
+    // ---- supervision months that closed under the requirement ----
+    if (supShort.length) {
+      h += '<div class="tk-group"><h3>Supervision shortfalls <span>' + supShort.length + '</span></h3>' +
+        '<div class="tk-filelist">';
+      supShort.forEach(function (r) {
+        var st = supStats(r);
+        h += '<a class="tk-filerow" href="#clientsup:' + esc(r.id) + '" data-jump="clientsup:' + esc(r.id) + '">' +
+          '<span class="tk-due-main"><strong>' + esc(r.client || 'Unnamed client') + '</strong>' +
+          '<small>' + esc(monthLabel(r.month)) + ' closed ' + esc(hm(st.short)) + ' short</small></span>' +
+          '<span class="tk-badge tk-over">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
+      });
+      h += '</div></div>';
+    }
 
     // ---- checklists, in full, because this is what gets checked daily ----
     var lists = Store.all('checklists').sort(function (a, b) {
@@ -907,8 +1082,7 @@
         }
       });
       h += '<td class="tk-actions">';
-      if (def.recurring) h += '<button type="button" class="tk-mini" data-done="' + esc(r.id) + '">' +
-        (mod === 'supervision' ? 'Log' : 'Done') + '</button>';
+      if (def.recurring) h += '<button type="button" class="tk-mini" data-done="' + esc(r.id) + '">Done</button>';
       h += '<button type="button" class="tk-mini" data-edit="' + esc(r.id) + '">Edit</button>' +
            '<button type="button" class="tk-mini tk-danger" data-del="' + esc(r.id) + '">Delete</button>' +
            '</td></tr>';
@@ -1068,8 +1242,18 @@
               (d.note ? '<small>' + esc(d.note) + '</small>' : '') + '</span>' +
             '<input type="date" class="tk-doc-date" data-docdate="' + ref + '" value="' + esc(ds.date || '') + '" ' +
               'aria-label="Date for ' + esc(d.name) + '"/>' +
-            '<button type="button" class="tk-mini tk-notebtn' + (ds.note ? ' has-note' : '') + '" ' +
-              'data-docnote="' + ref + '">' + (ds.note ? 'Note' : '+ Note') + '</button>' +
+            // One grid cell for the trailing controls, so adding the PDF link
+            // does not push the row onto a second line.
+            '<span class="tk-doc-acts">' +
+              '<button type="button" class="tk-mini tk-notebtn' + (ds.note ? ' has-note' : '') + '" ' +
+                'data-docnote="' + ref + '">' + (ds.note ? 'Note' : '+ Note') + '</button>' +
+              // Only employee files ever carry a stored PDF; client paperwork is
+              // recorded as done and the document itself never comes here.
+              (key === 'empfiles' && ds.file && ds.file.id
+                ? '<a class="tk-mini tk-docfile" target="_blank" rel="noopener" href="/api/documents?entityId=' +
+                  encodeURIComponent(currentId) + '&amp;id=' + encodeURIComponent(ds.file.id) + '">PDF</a>'
+                : '') +
+            '</span>' +
             (ds.note ? '<p class="tk-itemnote">' + esc(ds.note) + '</p>' : '') +
             '</div>';
         });
@@ -1092,6 +1276,290 @@
         '<span class="tk-badge tk-' + tone + '">' + st.done + ' / ' + st.total + '</span></a>';
     });
     return h2 + '</div>';
+  }
+
+  /* ------------------------------------------------- client supervision UI */
+
+  function supRows() {
+    return Store.all('clientsup').sort(function (a, b) {
+      // Newest month first, then client name inside a month.
+      if (a.month !== b.month) return String(b.month).localeCompare(String(a.month));
+      return String(a.client).localeCompare(String(b.client));
+    });
+  }
+
+  // Months that closed short. This is the number the dashboard leads with.
+  function supShortfalls() {
+    return supRows().filter(function (r) { return !supOpen(r) && supStats(r).short > 0; });
+  }
+
+  function supTone(r) {
+    var st = supStats(r);
+    if (!st.short) return 'ok';
+    return supOpen(r) ? 'soon' : 'over';
+  }
+
+  function renderClientSup() {
+    var def = SUPS.clientsup;
+    var rows = supRows();
+
+    var head = '<div class="tk-head"><div><h2>' + esc(def.label) + '</h2>' +
+      '<p class="tk-sub">' + esc(def.blurb) + '</p></div>' +
+      '<div class="tk-head-actions">' + syncChip('clientsup') +
+      '<button type="button" class="tk-btn tk-primary" data-supadd="1">+ Month</button>' +
+      '</div></div>';
+
+    /* ---------------- one month open: the report ---------------- */
+    if (currentId) {
+      var r = Store.get('clientsup', currentId);
+      if (!r) { location.hash = 'clientsup'; return head; }
+      var st = supStats(r);
+      var open = supOpen(r);
+      var tone = supTone(r);
+
+      var h = '<a class="page-back" href="#clientsup" data-jump="clientsup">&larr; All supervision months</a>' +
+        '<div class="tk-head"><div><h2>' + esc(r.client || 'Unnamed client') + '</h2>' +
+        '<p class="tk-sub">' + esc(monthLabel(r.month)) +
+        (r.qsp ? ' &middot; Primary BCBA / QSP ' + esc(r.qsp) : '') +
+        (r.location ? ' &middot; ' + esc(r.location === 'Other' && r.locationOther ? r.locationOther : r.location) : '') +
+        '</p></div><div class="tk-head-actions">' +
+        '<button type="button" class="tk-btn" data-supedit="' + esc(r.id) + '">Edit details</button>' +
+        '<button type="button" class="tk-btn tk-x" data-supdel="' + esc(r.id) + '">Delete</button>' +
+        '<button type="button" class="tk-btn" data-supprint="1">Print</button>' +
+        '<button type="button" class="tk-btn tk-primary" data-sesadd="' + esc(r.id) + '">+ Session</button>' +
+        '</div></div>';
+
+      // Required vs provided, stated the way the payer states it.
+      h += '<div class="tk-sup-summary">' +
+        '<div class="tk-sup-fig"><span class="tk-sup-k">Direct therapy this month</span>' +
+          '<strong>' + esc(hm(st.direct)) + '</strong></div>' +
+        '<div class="tk-sup-fig"><span class="tk-sup-k">Supervision required</span>' +
+          '<strong>' + esc(hm(st.required)) + '</strong>' +
+          '<small>1 hr per ' + SUP_RATIO + ' hrs of direct therapy</small></div>' +
+        '<div class="tk-sup-fig tk-' + tone + '"><span class="tk-sup-k">Supervision provided</span>' +
+          '<strong>' + esc(hm(st.provided)) + '</strong>' +
+          '<small>' + (st.short
+            ? esc(hm(st.short)) + ' short' + (open ? ' so far' : '')
+            : 'Requirement met') + '</small></div>' +
+        '</div>' +
+        '<span class="tk-progress tk-progress-lg"><span class="tk-' + tone + '" style="width:' + st.pct + '%"></span></span>';
+
+      if (st.short) {
+        h += '<p class="tk-note tk-note-warn"><strong>' + esc(hm(st.short)) + ' short.</strong> ' +
+          (open
+            ? 'This month is still open — ' + esc(monthLabel(r.month)) + ' ends ' + esc(fmtDate(monthEnd(r.month))) + '.'
+            : 'This month has closed.') + '</p>';
+      }
+
+      h += '<div class="tk-group"><h3>Supervision log <span>' + (r.sessions || []).length + '</span></h3>';
+      if (!(r.sessions || []).length) {
+        h += '<div class="tk-empty"><strong>No sessions logged.</strong> ' +
+          'Add each supervision session as it happens, and the hours provided add up here.</div>';
+      } else {
+        h += '<div class="tk-tablewrap"><table class="tk-table tk-sup-log"><thead><tr>' +
+          '<th>Supervisor</th><th>Date of service</th><th>Type</th>' +
+          '<th>Start</th><th>End</th><th>Duration</th><th class="tk-actions-h"></th>' +
+          '</tr></thead><tbody>';
+        (r.sessions || []).slice().sort(function (a, b) {
+          return String(a.date).localeCompare(String(b.date));
+        }).forEach(function (s) {
+          h += '<tr>' +
+            '<td>' + esc(s.supervisor || '—') + '</td>' +
+            '<td>' + esc(fmtDate(s.date)) + '</td>' +
+            '<td>' + esc(s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—')) + '</td>' +
+            '<td>' + esc(fmtTime(s.start)) + '</td>' +
+            '<td>' + esc(fmtTime(s.end)) + '</td>' +
+            '<td>' + esc(hm(minsBetween(s.start, s.end))) + '</td>' +
+            '<td class="tk-actions">' +
+              '<button type="button" class="tk-mini" data-sesedit="' + esc(r.id + '|' + s.id) + '">Edit</button>' +
+              '<button type="button" class="tk-mini tk-x" data-sesdel="' + esc(r.id + '|' + s.id) + '">Remove</button>' +
+            '</td></tr>';
+        });
+        h += '</tbody></table></div>';
+      }
+      h += '</div>';
+
+      if (r.notes) h += '<p class="tk-listnote">' + esc(r.notes) + '</p>';
+      return h;
+    }
+
+    /* ---------------- the roster of months ---------------- */
+    if (!rows.length) {
+      var clients = Store.all('clients').length;
+      return head + '<div class="tk-empty"><strong>Nothing logged yet.</strong> ' +
+        (clients
+          ? 'Add a month for a client and log each supervision session against it.'
+          : 'Add clients on the <a href="#clients" data-jump="clients">Clients</a> tab first.') +
+        '</div>';
+    }
+
+    var short = supShortfalls().length;
+    var h2 = head;
+    if (short) {
+      h2 += '<p class="tk-note tk-note-warn"><strong>' + short + ' closed month' +
+        (short === 1 ? '' : 's') + ' ended short of the supervision requirement.</strong> ' +
+        'Those rows are marked below.</p>';
+    }
+
+    h2 += '<div class="tk-filelist">';
+    rows.forEach(function (r) {
+      var st = supStats(r);
+      var tone = supTone(r);
+      var note = st.short
+        ? hm(st.short) + ' short' + (supOpen(r) ? ' — month still open' : '')
+        : 'Requirement met';
+      h2 += '<a class="tk-filerow" href="#clientsup:' + esc(r.id) + '" data-jump="clientsup:' + esc(r.id) + '">' +
+        '<span class="tk-due-main"><strong>' + esc(r.client || 'Unnamed client') + '</strong>' +
+        '<small>' + esc(monthLabel(r.month)) + ' &middot; ' + esc(note) + '</small></span>' +
+        '<span class="tk-progress"><span class="tk-' + tone + '" style="width:' + st.pct + '%"></span></span>' +
+        '<span class="tk-badge tk-' + tone + '">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
+    });
+    return h2 + '</div>';
+  }
+
+  /* ---- editors ---- */
+
+  function openSupEditor(id) {
+    var rec = id ? Store.get('clientsup', id) : null;
+    var clients = Store.all('clients').map(function (c) { return c.name; }).sort();
+    var staff = Store.all('staff').map(function (s) { return s.name; }).sort();
+
+    function sel(name, label, opts, val, req) {
+      var s = '<div class="tk-f"><label for="f_' + name + '">' + esc(label) +
+        (req ? ' <em>*</em>' : '') + '</label><select id="f_' + name + '" name="' + name + '"><option value="">—</option>';
+      var list = opts.slice();
+      if (val && list.indexOf(val) < 0) list.push(val);
+      list.forEach(function (o) {
+        s += '<option value="' + esc(o) + '"' + (String(val) === String(o) ? ' selected' : '') + '>' + esc(o) + '</option>';
+      });
+      return s + '</select></div>';
+    }
+
+    var d = rec ? Math.max(0, +rec.directMin || 0) : 0;
+    var body = '<div class="tk-form-grid">' +
+      sel('client', 'Client', clients, rec ? rec.client : '', true) +
+      '<div class="tk-f"><label for="f_month">Month <em>*</em></label>' +
+        '<input type="month" id="f_month" name="month" required value="' +
+        esc(rec ? rec.month : thisMonth()) + '"/></div>' +
+      sel('qsp', 'Primary BCBA / QSP', staff, rec ? rec.qsp : '') +
+      sel('location', 'Primary service location', SUP_LOCATIONS, rec ? rec.location : '') +
+      '<div class="tk-f"><label for="f_locationOther">If other</label>' +
+        '<input type="text" id="f_locationOther" name="locationOther" value="' +
+        esc(rec ? rec.locationOther : '') + '"/></div>' +
+      '<div class="tk-f"><label for="f_dh">Direct therapy hours</label>' +
+        '<input type="number" id="f_dh" name="dh" min="0" step="1" value="' + Math.floor(d / 60) + '"/></div>' +
+      '<div class="tk-f"><label for="f_dm">…and minutes</label>' +
+        '<input type="number" id="f_dm" name="dm" min="0" max="59" step="1" value="' + (d % 60) + '"/></div>' +
+      '<div class="tk-f tk-f-wide"><label for="f_notes">Notes</label>' +
+        '<textarea id="f_notes" name="notes" rows="3">' + esc(rec ? rec.notes : '') + '</textarea></div>' +
+      '</div>' +
+      '<p class="tk-modal-note">Required supervision is calculated for you: 1 hour per ' + SUP_RATIO +
+      ' hours of direct therapy.</p>';
+
+    showModal((id ? 'Edit ' : 'Add ') + 'supervision month', body, function (form) {
+      var client = form.elements.client.value.trim();
+      var month = form.elements.month.value.trim();
+      if (!client) return 'Please choose a client.';
+      if (!/^\d{4}-\d{2}$/.test(month)) return 'Please choose a month.';
+
+      // One record per client per month, so the totals cannot end up split
+      // across two rows that each look compliant on their own.
+      var clash = null;
+      Store.all('clientsup').forEach(function (x) {
+        if (x.client === client && x.month === month && x.id !== (rec && rec.id)) clash = x;
+      });
+      if (clash) return 'There is already a ' + monthLabel(month) + ' record for ' + client + '.';
+
+      var next = rec ? Object.assign({}, rec) : { id: uid(), sessions: [] };
+      next.client = client;
+      next.month = month;
+      next.qsp = form.elements.qsp.value.trim();
+      next.location = form.elements.location.value.trim();
+      next.locationOther = form.elements.locationOther.value.trim();
+      next.notes = form.elements.notes.value.trim();
+      next.directMin = Math.max(0, (+form.elements.dh.value || 0) * 60 + (+form.elements.dm.value || 0));
+      Store.save('clientsup', next);
+      flash('Supervision month saved.');
+      if (!id) location.hash = 'clientsup:' + next.id;
+      return true;
+    });
+  }
+
+  function openSessionEditor(recId, sesId) {
+    var rec = Store.get('clientsup', recId);
+    if (!rec) return;
+    var ses = (rec.sessions || []).filter(function (s) { return s.id === sesId; })[0] || null;
+    var staff = Store.all('staff').map(function (s) { return s.name; }).sort();
+
+    function sel(name, label, opts, val) {
+      var s = '<div class="tk-f"><label for="f_' + name + '">' + esc(label) +
+        '</label><select id="f_' + name + '" name="' + name + '"><option value="">—</option>';
+      var list = opts.slice();
+      if (val && list.indexOf(val) < 0) list.push(val);
+      list.forEach(function (o) {
+        s += '<option value="' + esc(o) + '"' + (String(val) === String(o) ? ' selected' : '') + '>' + esc(o) + '</option>';
+      });
+      return s + '</select></div>';
+    }
+
+    var body = '<div class="tk-form-grid">' +
+      sel('supervisor', 'Supervisor', staff, ses ? ses.supervisor : (rec.qsp || '')) +
+      '<div class="tk-f"><label for="f_date">Date of service <em>*</em></label>' +
+        '<input type="date" id="f_date" name="date" required value="' + esc(ses ? ses.date : '') + '"/></div>' +
+      sel('code', 'Supervision type', SUP_CODES, ses ? ses.code : '') +
+      '<div class="tk-f"><label for="f_codeOther">If other</label>' +
+        '<input type="text" id="f_codeOther" name="codeOther" value="' + esc(ses ? ses.codeOther : '') + '"/></div>' +
+      '<div class="tk-f"><label for="f_start">Start time <em>*</em></label>' +
+        '<input type="time" id="f_start" name="start" required value="' + esc(ses ? ses.start : '') + '"/></div>' +
+      '<div class="tk-f"><label for="f_end">End time <em>*</em></label>' +
+        '<input type="time" id="f_end" name="end" required value="' + esc(ses ? ses.end : '') + '"/></div>' +
+      '</div>';
+
+    showModal((ses ? 'Edit ' : 'Add ') + 'supervision session', body, function (form) {
+      var date = form.elements.date.value.trim();
+      var start = form.elements.start.value.trim();
+      var end = form.elements.end.value.trim();
+      if (!date) return 'Please enter the date of service.';
+      if (!start || !end) return 'Please enter both a start and an end time.';
+      if (!minsBetween(start, end)) return 'The end time needs to be after the start time.';
+
+      // A session dated outside the month it is filed under would quietly
+      // inflate that month's total.
+      if (date < monthStart(rec.month) || date > monthEnd(rec.month)) {
+        return 'That date falls outside ' + monthLabel(rec.month) + '.';
+      }
+
+      var next = Object.assign({}, rec);
+      next.sessions = (rec.sessions || []).slice();
+      var row = {
+        id: ses ? ses.id : uid(),
+        supervisor: form.elements.supervisor.value.trim(),
+        date: date,
+        code: form.elements.code.value.trim(),
+        codeOther: form.elements.codeOther.value.trim(),
+        start: start, end: end
+      };
+      var at = -1;
+      next.sessions.forEach(function (s, i) { if (s.id === row.id) at = i; });
+      if (at < 0) next.sessions.push(row); else next.sessions[at] = row;
+
+      Store.save('clientsup', next);
+      flash('Session saved.');
+      return true;
+    });
+  }
+
+  function removeSession(recId, sesId) {
+    var rec = Store.get('clientsup', recId);
+    if (!rec) return;
+    confirmModal('Remove this session?',
+      'The hours it contributed come off this month’s total.', 'Remove', function () {
+        var next = Object.assign({}, rec);
+        next.sessions = (rec.sessions || []).filter(function (s) { return s.id !== sesId; });
+        Store.save('clientsup', next);
+        flash('Session removed.');
+        render();
+      });
   }
 
   /* ------------------------------------------------------------ checklists */
@@ -1404,8 +1872,8 @@
 
     h += '<div class="tk-scopes">';
     ALL_KEYS.forEach(function (m) {
-      var def = MODULES[m] || FILES[m] ||
-        { label: m === 'training' ? 'Staff EIDBI Training' : 'My Checklists', phi: false };
+      var def = defOf(m).label ? defOf(m)
+        : { label: m === 'training' ? 'Staff EIDBI Training' : 'My Checklists', phi: false };
       var scope = Store.scope(m);
       h += '<div class="tk-scope-row">' +
         '<div><strong>' + esc(def.label) + '</strong>' +
@@ -1413,10 +1881,38 @@
         '<small>' + (scope === 'shared'
           ? 'Shared — every staff browser sees the same records.'
           : 'This browser only — nothing leaves this device.') + '</small></div>' +
+        '<div class="tk-head-actions">' +
+        (def.phi && scope === 'local'
+          ? '<button type="button" class="tk-btn tk-x" data-purge="' + esc(m) + '">Clear server copy</button>'
+          : '') +
         '<button type="button" class="tk-btn tk-toggle" data-scope="' + esc(m) + '">' +
-        (scope === 'shared' ? 'Make local' : 'Share with staff') + '</button></div>';
+        (scope === 'shared' ? 'Make local' : 'Share with staff') + '</button></div></div>';
     });
     h += '</div>';
+
+    /* Notifications. What this panel mostly does is state the limit, because
+     * the limit is not guessable: a scheduled job runs on a server and can
+     * only read what has been shared to it, so the client tabs — which never
+     * leave the browser — cannot be part of an email. Somebody who assumed
+     * otherwise would trust an alert that was never coming. */
+    h += '<div class="tk-group"><h3>Notifications</h3>' +
+      '<p class="tk-sub">A daily job emails whatever has just crossed a deadline — 60, 30, 14, 7, 3 ' +
+      'and 1 day out, then overdue. Each step is announced once, so nothing repeats at you every ' +
+      'morning until it is dealt with.</p>' +
+      '<div class="tk-scopes">' +
+        '<div class="tk-scope-row"><div><strong>Included</strong>' +
+          '<small>Staff credentials, agency renewals, payroll &amp; billing reminders.</small></div></div>' +
+        '<div class="tk-scope-row"><div><strong>Not included</strong>' +
+          '<span class="tk-tag-phi">contains client data</span>' +
+          '<small>Client authorizations, client supervision and client files stay on the browser ' +
+          'they were entered on, so the job that sends the email cannot read them — and an email ' +
+          'could never carry a client name. Those show on the dashboard instead.</small></div></div>' +
+      '</div>' +
+      '<p class="tk-sub" style="margin-top:12px">Set up in Netlify under Site configuration &rarr; ' +
+      'Environment variables: <code>NOTIFY_TO</code> and one of <code>RESEND_API_KEY</code> or ' +
+      '<code>SENDGRID_API_KEY</code>. For a text message add <code>NOTIFY_SMS_TO</code> and the ' +
+      'three <code>TWILIO_*</code> values. Without them the job runs and sends nothing.</p>' +
+      '</div>';
 
     h += '<div class="tk-group"><h3>Backup</h3>' +
       '<p class="tk-sub">A backup file holds every tab on this browser, shared and local alike. ' +
@@ -1458,24 +1954,59 @@
 
   /* ------------------------------------------------------------ tabs + app */
 
-  var TABS = [
-    { k: 'dashboard',   label: 'Dashboard' },
-    { k: 'checklists',  label: 'Checklists' },
-    { k: 'reminders',   label: 'Reminders' },
-    { k: 'clients',     label: 'Clients', sep: true },
-    { k: 'clientfiles', label: 'Client Files' },
-    { k: 'auths',       label: 'Authorizations' },
-    { k: 'staff',       label: 'Staff', sep: true },
-    { k: 'empfiles',    label: 'Employee Files' },
-    { k: 'training',    label: 'Training' },
-    { k: 'supervision', label: 'Supervision' },
-    { k: 'credentials', label: 'Credentials' },
-    { k: 'renewals',    label: 'Renewals', sep: true },
-    { k: 'contacts',    label: 'Contacts' },
-    { k: 'settings',    label: 'Settings' }
+  /* Navigation is two levels.
+   *
+   * Fifteen peer tabs in one row gave no clue what belonged with what, and
+   * carried names that only made sense next to each other — "Supervision"
+   * meant staff observations while "Client Supervision" meant something else
+   * entirely. Grouping by who the record is about lets the second level use
+   * short labels, because the section already says whose roster or files these
+   * are. Hash routing is unchanged: the section is derived from the tab, never
+   * stored, so every existing #clientsup:id link still works.
+   */
+  var SECTIONS = [
+    { k: 'home', label: 'Dashboard', tabs: [{ k: 'dashboard', label: 'Dashboard' }] },
+    { k: 'clientarea', label: 'Clients', tabs: [
+      { k: 'clients',     label: 'Roster' },
+      { k: 'clientfiles', label: 'Files' },
+      { k: 'clientsup',   label: 'Supervision' },
+      { k: 'auths',       label: 'Authorizations' }
+    ] },
+    { k: 'staffarea', label: 'Staff', tabs: [
+      { k: 'staff',       label: 'Roster' },
+      { k: 'empfiles',    label: 'Files' },
+      { k: 'training',    label: 'Training' },
+      { k: 'credentials', label: 'Credentials' }
+    ] },
+    { k: 'agency', label: 'Agency', tabs: [
+      { k: 'renewals',    label: 'Renewals' },
+      { k: 'reminders',   label: 'Reminders' },
+      { k: 'checklists',  label: 'Checklists' },
+      { k: 'contacts',    label: 'Contacts' }
+    ] },
+    { k: 'setup', label: 'Settings', tabs: [{ k: 'settings', label: 'Settings' }] }
   ];
 
+  // Flat list, in nav order — the routing table.
+  var TABS = SECTIONS.reduce(function (all, s) { return all.concat(s.tabs); }, []);
+
+  function sectionOf(tabKey) {
+    for (var i = 0; i < SECTIONS.length; i++) {
+      for (var j = 0; j < SECTIONS[i].tabs.length; j++) {
+        if (SECTIONS[i].tabs[j].k === tabKey) return SECTIONS[i];
+      }
+    }
+    return SECTIONS[0];
+  }
+
   var root, current = 'dashboard', currentId = '';
+
+  /* Embedded mode.
+   * The portal home page mounts the dashboard on its own, with no tab bar —
+   * "what needs attention" is the first thing staff should see on landing,
+   * without a detour through the tracker. In that mode the hash belongs to
+   * the host page, so links leave for tracker.html instead of routing here. */
+  var embedded = false;
 
   function currentTab() {
     var raw = (location.hash || '').replace(/^#/, '');
@@ -1493,19 +2024,37 @@
     dueItems(0).forEach(function (i) {
       if (i.days < 0) counts[i.mod] = (counts[i.mod] || 0) + 1;
     });
+    // Supervision has no due date — a closed month that came up short is the
+    // equivalent, so it badges the same way.
+    var s = supShortfalls().length;
+    if (s) counts.clientsup = s;
     return counts;
   }
 
   function renderTabs() {
     var counts = overdueByModule();
-    var h = '<nav class="tk-tabs" role="tablist">';
-    TABS.forEach(function (t) {
-      var n = counts[t.k] || 0;
-      h += '<a role="tab" href="#' + t.k + '" class="' + (t.k === current ? 'active' : '') +
-        (t.sep ? ' tk-sep' : '') + '">' +
-        esc(t.label) + (n ? '<span class="tk-dot">' + n + '</span>' : '') + '</a>';
+    var here = sectionOf(current);
+
+    // Level one: who the records are about.
+    var h = '<nav class="tk-nav" aria-label="Sections">';
+    SECTIONS.forEach(function (s) {
+      var n = s.tabs.reduce(function (sum, t) { return sum + (counts[t.k] || 0); }, 0);
+      h += '<a href="#' + s.tabs[0].k + '" class="' + (s === here ? 'active' : '') + '">' +
+        esc(s.label) + (n ? '<span class="tk-dot">' + n + '</span>' : '') + '</a>';
     });
-    return h + '</nav>';
+    h += '</nav>';
+
+    // Level two, only where there is a choice to make.
+    if (here.tabs.length > 1) {
+      h += '<nav class="tk-tabs" role="tablist" aria-label="' + esc(here.label) + '">';
+      here.tabs.forEach(function (t) {
+        var n = counts[t.k] || 0;
+        h += '<a role="tab" href="#' + t.k + '" class="' + (t.k === current ? 'active' : '') + '">' +
+          esc(t.label) + (n ? '<span class="tk-dot">' + n + '</span>' : '') + '</a>';
+      });
+      h += '</nav>';
+    }
+    return h;
   }
 
   function renderBody() {
@@ -1514,10 +2063,18 @@
     if (current === 'training') return renderTraining();
     if (current === 'checklists') return renderChecklists();
     if (FILES[current]) return renderFiles(current);
+    if (SUPS[current]) return renderClientSup();
     return renderTable(current);
   }
 
   function render() {
+    if (embedded) {
+      current = 'dashboard';
+      currentId = '';
+      root.innerHTML = '<div class="tk-panel">' + renderDashboard() + '</div>';
+      return;
+    }
+
     var at = currentTab();
     current = at.tab;
     currentId = at.id;
@@ -1539,7 +2096,7 @@
   }
 
   function scopeToggle(mod) {
-    var def = MODULES[mod] || {};
+    var def = defOf(mod);
     var next = Store.scope(mod) === 'shared' ? 'local' : 'shared';
 
     if (next === 'shared' && def.phi) {
@@ -1574,6 +2131,44 @@
         openTrainingEditor(p[0], p[1]);
         return;
       }
+      if ((el = e.target.closest('[data-purge]'))) {
+        var pm = el.dataset.purge, pl = defOf(pm).label || pm;
+        confirmModal('Clear the server copy of ' + esc(pl) + '?',
+          'Records uploaded to Netlify storage before this tab was made local are deleted there. ' +
+          'What is on this browser is untouched, and stays the working copy.',
+          'Clear it', function () {
+            Store.purgeServer(pm)
+              .then(function () { flash('Server copy of ' + pl + ' cleared.'); render(); })
+              .catch(function (err) { flash(err.message || 'Could not clear it.', true); });
+          });
+        return;
+      }
+      if ((el = e.target.closest('[data-supadd]'))) { openSupEditor(''); return; }
+      if ((el = e.target.closest('[data-supedit]'))) { openSupEditor(el.dataset.supedit); return; }
+      if ((el = e.target.closest('[data-supprint]'))) { window.print(); return; }
+      if ((el = e.target.closest('[data-sesadd]'))) { openSessionEditor(el.dataset.sesadd, ''); return; }
+      if ((el = e.target.closest('[data-sesedit]'))) {
+        var se = el.dataset.sesedit.split('|');
+        openSessionEditor(se[0], se[1]);
+        return;
+      }
+      if ((el = e.target.closest('[data-sesdel]'))) {
+        var sd = el.dataset.sesdel.split('|');
+        removeSession(sd[0], sd[1]);
+        return;
+      }
+      if ((el = e.target.closest('[data-supdel]'))) {
+        var sdi = el.dataset.supdel, sdr = Store.get('clientsup', sdi);
+        confirmModal('Delete this supervision month?',
+          '<strong>' + esc(sdr ? supTitle(sdr) : '') + '</strong><br>' +
+          'Its session log goes with it. This cannot be undone.',
+          'Delete', function () {
+            Store.remove('clientsup', sdi);
+            flash('Deleted.');
+            location.hash = 'clientsup';
+          });
+        return;
+      }
       if ((el = e.target.closest('[data-del]'))) {
         var mod = current, id = el.dataset.del, def = MODULES[mod];
         confirmModal('Delete this record?',
@@ -1581,7 +2176,13 @@
           'Delete', function () { Store.remove(mod, id); flash('Deleted.'); });
         return;
       }
-      if ((el = e.target.closest('[data-jump]'))) { e.preventDefault(); location.hash = el.dataset.jump; return; }
+      if ((el = e.target.closest('[data-jump]'))) {
+        e.preventDefault();
+        // On the home page the hash is not ours to steer; go to the tracker.
+        if (embedded) location.href = 'tracker.html#' + el.dataset.jump;
+        else location.hash = el.dataset.jump;
+        return;
+      }
       if ((el = e.target.closest('[data-scope]'))) { scopeToggle(el.dataset.scope); return; }
 
       if (e.target.closest('[data-syncall]')) { Store.pullAll().then(function () { flash('Synced.'); render(); }); return; }
@@ -1739,12 +2340,57 @@
 
   /* ------------------------------------------------------------------ boot */
 
+  /* Apply anything the fillable forms left behind.
+   *
+   * A form cannot write to /api/tracker itself — this file owns the sync
+   * rules, and a second writer would have to reimplement all of them. So the
+   * forms append to an inbox in localStorage (see /packet.js) and it is
+   * drained here, through the same Store as every other edit. Entries are
+   * removed before they are applied: a malformed one should be dropped, not
+   * retried on every load forever.
+   */
+  function drainInbox() {
+    if (!root || typeof NoorPacket === 'undefined') return 0;
+    var queued;
+    try { queued = NoorPacket.drain(); } catch (e) { return 0; }
+    if (!queued || !queued.length) return 0;
+
+    var applied = 0;
+    queued.forEach(function (e) {
+      try {
+        if (e.t === 'upsert' && e.rec && e.rec.id && ALL_KEYS.indexOf(e.mod) >= 0) {
+          // Do not clobber a record the tracker already knows better.
+          var have = Store.get(e.mod, e.rec.id);
+          if (!have) { Store.save(e.mod, e.rec); applied++; }
+        } else if (e.t === 'doc' && FILES[e.key] && e.entityId && e.docId) {
+          docSet(e.key, e.entityId, e.docId, {
+            status: e.status || 'yes',
+            date: e.date || toISO(today()),
+            note: e.note || '',
+            file: e.file || undefined
+          });
+          applied++;
+        }
+      } catch (err) { /* one bad entry should not stop the rest */ }
+    });
+    return applied;
+  }
+
   function start() {
     root = document.getElementById('tracker');
-    if (!root) return;
+    if (!root) {
+      root = document.getElementById('tracker-dashboard');
+      if (!root) return;
+      embedded = true;
+    }
     Store.init();
+    Store.sweepRetired();
+    var fromForms = drainInbox();
     wire();
     render();
+    if (fromForms) {
+      flash(fromForms + ' update' + (fromForms === 1 ? '' : 's') + ' from completed forms applied.');
+    }
 
     var pending = null;
     Store.onChange(function () {

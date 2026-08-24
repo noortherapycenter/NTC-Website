@@ -47,6 +47,77 @@
   .nav-group li a.active { color: var(--green-dark); border-left-color: var(--green); background: #eef7ea; font-weight: 700; }
   .nav-group li a small { display: block; font-size: 10.5px; font-weight: 500; opacity: .8; }
 
+  /* ---- Packet bar: who this packet is for ---- */
+  .packet-bar {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    background: #fff; border: 1.5px solid var(--line); border-radius: 14px;
+    padding: 13px 18px; margin: 0 0 20px;
+    font-size: 13.5px; color: var(--muted); line-height: 1.5;
+  }
+  .packet-bar.is-empty { border-style: dashed; }
+  .packet-bar.is-set { border-color: var(--green); background: #f4faf1; }
+  .packet-bar .pb-who { flex: 1; min-width: 200px; }
+  .packet-bar .pb-who strong { color: var(--ink); font-size: 15px; font-weight: 800; }
+  .packet-bar .pb-who small { display: block; font-size: 11.5px; margin-top: 2px; }
+  .packet-bar .pb-kind {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.12em;
+    text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+    background: #eef7ea; color: var(--green-dark); margin-left: 8px; vertical-align: 2px;
+  }
+  .packet-bar .pb-kind.is-client { background: #fce8ef; color: #b31e48; }
+  .packet-bar button {
+    font-family: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 999px; padding: 8px 16px;
+  }
+  .packet-bar button:hover { border-color: var(--green); color: var(--green-dark); }
+  .packet-bar button.pb-primary { background: var(--green); border-color: var(--green); color: #fff; }
+  .packet-bar button.pb-primary:hover { background: var(--green-dark); color: #fff; }
+
+  /* Per-form status, stamped onto the packet item rows. */
+  .ob-doc .item .pb-state {
+    display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    background: #f3eddd; color: var(--muted);
+  }
+  .ob-doc .item .pb-state.is-yes { background: #eef7ea; color: var(--green-dark); }
+  .ob-doc .item .pb-state.is-na { background: #f3eddd; color: var(--muted); opacity: .7; }
+
+  /* ---- Picker ---- */
+  .pb-back {
+    position: fixed; inset: 0; background: rgba(20,24,15,.45); z-index: 60;
+    display: grid; place-items: center; padding: 20px;
+  }
+  .pb-card {
+    background: #fff; border-radius: 18px; padding: 26px 28px; width: min(460px, 100%);
+    max-height: 85vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,.25);
+  }
+  .pb-card h3 { margin: 0 0 6px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; color: var(--ink); }
+  .pb-card p.pb-lede { margin: 0 0 18px; font-size: 13px; color: var(--muted); line-height: 1.55; }
+  .pb-seg { display: flex; gap: 8px; margin-bottom: 18px; }
+  .pb-seg button {
+    flex: 1; font-family: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--line); background: #fff; color: var(--muted);
+    border-radius: 10px; padding: 10px;
+  }
+  .pb-seg button[aria-pressed="true"] { border-color: var(--green); background: #eef7ea; color: var(--green-dark); }
+  .pb-f { margin-bottom: 14px; }
+  .pb-f label { display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .pb-f select, .pb-f input {
+    width: 100%; font-family: inherit; font-size: 13.5px; color: var(--ink); background: #faf7ee;
+    border: 1.5px solid var(--line); border-radius: 10px; padding: 10px 12px; outline: none;
+  }
+  .pb-f select:focus, .pb-f input:focus { border-color: var(--green); background: #fff; }
+  .pb-or { text-align: center; font-size: 11px; font-weight: 800; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); margin: 4px 0 14px; }
+  .pb-foot { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+  .pb-err { font-size: 12.5px; font-weight: 700; color: #b0483f; margin: 0 0 12px; }
+  .pb-note { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 14px 0 0;
+    border-top: 1px solid var(--line); padding-top: 12px; }
+
+  @media print { .packet-bar button, .pb-back { display: none !important; } }
+
   /* ---- Actions ---- */
   .pol-actions { display: flex; gap: 10px; margin: 0 0 16px; flex-wrap: wrap; align-items: center; }
   .pol-actions[hidden] { display: none; }
@@ -141,6 +212,9 @@
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h10"></path></svg>
     Browse onboarding
   </button>
+
+  <!-- Who this packet is for. Everything below fills in against this person. -->
+  <div class="packet-bar" id="packet-bar"></div>
 
   <div class="manual" id="manual">
     <aside class="nav-tree" id="nav-tree" data-screen-label="Onboarding nav tree">
@@ -288,6 +362,193 @@
   document.getElementById("mob-nav").addEventListener("click", function () {
     manual.classList.toggle("nav-open");
   });
+})();
+</script>
+
+<script src="/packet.js"></script>
+<script>
+/* Packet context: the person this onboarding run is for.
+ *
+ * The choice is stored once (localStorage, via /packet.js) rather than passed
+ * through every link, because the fillable forms open as their own pages and
+ * would otherwise each need the id threaded onto their URL. Each packet item
+ * is stamped with whether that document is already on file, so the packet
+ * doubles as the progress view instead of needing to be cross-checked against
+ * the tracker by hand.
+ */
+(function () {
+  "use strict";
+  if (!window.NoorPacket) return;
+
+  var P = window.NoorPacket;
+  var bar = document.getElementById("packet-bar");
+  var content = document.getElementById("content");
+  if (!bar || !content) return;
+
+  var STATE_LABEL = { yes: "On file", na: "N/A", none: "Outstanding" };
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ---- the bar ---- */
+
+  function paintBar() {
+    var p = P.get();
+    if (!p) {
+      bar.className = "packet-bar is-empty";
+      bar.innerHTML =
+        '<span class="pb-who">This packet is not linked to anyone yet.' +
+        "<small>Link it to a staff member or client and completed forms file themselves.</small></span>" +
+        '<button type="button" class="pb-primary" id="pb-pick">Choose someone</button>';
+    } else {
+      var kind = p.kind === "client" ? "client" : "staff";
+      bar.className = "packet-bar is-set";
+      bar.innerHTML =
+        '<span class="pb-who"><strong>' + esc(p.name || "Unnamed") + "</strong>" +
+        '<span class="pb-kind' + (kind === "client" ? " is-client" : "") + '">' + kind + "</span>" +
+        "<small>Completed forms file against this " + (kind === "client" ? "client" : "staff member") +
+        ".</small></span>" +
+        '<button type="button" id="pb-pick">Change</button>' +
+        '<button type="button" id="pb-clear">Unlink</button>';
+    }
+    paintItems();
+  }
+
+  /* ---- per-item status ---- */
+
+  function paintItems() {
+    var p = P.get();
+    content.querySelectorAll(".item").forEach(function (row) {
+      var old = row.querySelector(".pb-state");
+      if (old) old.remove();
+      if (!p) return;
+
+      var link = row.querySelector('a[href*="Fillable Forms/"]');
+      if (!link) return;
+      var file = decodeURIComponent((link.getAttribute("href") || "").split("/").pop() || "")
+        .replace(/\.html?$/i, "");
+      var info = P.FORMS[file];
+      // Only stamp forms that belong to the kind of person this packet is for.
+      if (!info || info.kind !== p.kind) return;
+
+      var st = P.docStatus(p.kind, p.id, info.doc);
+      var tag = document.createElement("span");
+      tag.className = "pb-state is-" + st;
+      tag.textContent = STATE_LABEL[st] || STATE_LABEL.none;
+      var links = row.querySelector(".links");
+      (links || row).appendChild(tag);
+    });
+  }
+
+  /* ---- picker ---- */
+
+  function openPicker() {
+    var p = P.get();
+    // The client track is the one page that is unambiguously about a client.
+    var hint = (location.hash || "").indexOf("clients") >= 0 ? "client" : "staff";
+    var kind = p ? p.kind : hint;
+
+    var back = document.createElement("div");
+    back.className = "pb-back";
+    document.body.appendChild(back);
+
+    function close() { back.remove(); document.removeEventListener("keydown", onKey); }
+    function onKey(e) { if (e.key === "Escape") close(); }
+    document.addEventListener("keydown", onKey);
+    back.addEventListener("click", function (e) { if (e.target === back) close(); });
+
+    function draw(list, err) {
+      var opts = '<option value="">Choose…</option>';
+      list.slice()
+        .sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); })
+        .forEach(function (r) {
+          opts += '<option value="' + esc(r.id) + '"' +
+            (p && p.id === r.id ? " selected" : "") + ">" + esc(r.name || "Unnamed") + "</option>";
+        });
+
+      back.innerHTML =
+        '<div class="pb-card" role="dialog" aria-modal="true" aria-label="Choose who this packet is for">' +
+        "<h3>Who is this packet for?</h3>" +
+        '<p class="pb-lede">Completed forms file themselves against this person, and each item below ' +
+        "shows whether it is already on file.</p>" +
+        '<div class="pb-seg">' +
+          '<button type="button" data-kind="staff" aria-pressed="' + (kind === "staff") + '">Staff member</button>' +
+          '<button type="button" data-kind="client" aria-pressed="' + (kind === "client") + '">Client</button>' +
+        "</div>" +
+        (err ? '<p class="pb-err">' + esc(err) + "</p>" : "") +
+        '<div class="pb-f"><label for="pb-existing">Existing ' + (kind === "client" ? "client" : "staff") + "</label>" +
+          '<select id="pb-existing">' + opts + "</select></div>" +
+        '<p class="pb-or">or</p>' +
+        '<div class="pb-f"><label for="pb-new">Add someone new</label>' +
+          '<input type="text" id="pb-new" placeholder="Full name" autocomplete="off"/></div>' +
+        (kind === "client"
+          ? '<p class="pb-note"><strong>Client paperwork stays local.</strong> Client names are protected ' +
+            "health information, so a client’s completed forms are recorded as done and printed — " +
+            "the documents themselves are not uploaded.</p>"
+          : '<p class="pb-note">Completed staff forms are saved as PDFs against this person’s ' +
+            "employee file, and can be reopened from the tracker.</p>") +
+        '<div class="pb-foot">' +
+          '<button type="button" id="pb-cancel">Cancel</button>' +
+          '<button type="button" class="pb-primary" id="pb-save">Use this packet</button>' +
+        "</div></div>";
+
+      back.querySelectorAll("[data-kind]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          if (b.dataset.kind === kind) return;
+          kind = b.dataset.kind;
+          load();
+        });
+      });
+      back.querySelector("#pb-cancel").addEventListener("click", close);
+      back.querySelector("#pb-save").addEventListener("click", function () {
+        var name = back.querySelector("#pb-new").value.trim();
+        var chosen = back.querySelector("#pb-existing").value;
+        if (name) {
+          var made = P.createPerson(kind, name, kind === "staff" ? { active: true } : {});
+          if (!made) return draw(list, "Could not add that person.");
+        } else if (chosen) {
+          var rec = null;
+          list.forEach(function (r) { if (r.id === chosen) rec = r; });
+          P.set(kind, chosen, rec ? rec.name : "");
+        } else {
+          return draw(list, "Choose someone, or type a name to add.");
+        }
+        close();
+        paintBar();
+      });
+
+      var sel = back.querySelector("#pb-existing");
+      var box = back.querySelector("#pb-new");
+      // Typing a new name and picking an existing one are alternatives, so
+      // each clears the other rather than silently losing to it on save.
+      box.addEventListener("input", function () { if (box.value.trim()) sel.value = ""; });
+      sel.addEventListener("change", function () { if (sel.value) box.value = ""; });
+    }
+
+    function load() {
+      back.innerHTML = '<div class="pb-card"><p class="pb-lede">Loading…</p></div>';
+      P.roster(kind).then(function (list) { draw(list || [], ""); });
+    }
+    load();
+  }
+
+  bar.addEventListener("click", function (e) {
+    if (e.target.closest("#pb-pick")) { openPicker(); return; }
+    if (e.target.closest("#pb-clear")) { P.clear(); paintBar(); return; }
+  });
+
+  // The reader pane swaps its contents on every navigation; re-stamp then.
+  new MutationObserver(paintItems).observe(content, { childList: true });
+
+  // Another tab may have changed the packet, or a form may have just filed
+  // something against it.
+  window.addEventListener("storage", paintBar);
+  window.addEventListener("focus", paintItems);
+
+  paintBar();
 })();
 </script>
 

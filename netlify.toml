@@ -19,7 +19,14 @@
   function = "staff-auth"
 
 # Admin Tracker sync API (Netlify Blobs). Checks the same staff cookie
-# that staff-auth.js issues, so it is protected by the portal PIN.
+# that staff-auth.js issues, so it is protected by the portal sign-in.
 [[edge_functions]]
   path = "/api/tracker"
   function = "tracker-data"
+
+# Completed-form storage for STAFF files (Netlify Blobs). Same staff cookie as
+# above. The function refuses client uploads outright — client paperwork is PHI
+# and this storage carries no business associate agreement.
+[[edge_functions]]
+  path = "/api/documents"
+  function = "documents"

@@ -1,4 +1,4 @@
 # Access control for the admin area lives in netlify/edge-functions/staff-auth.js
-# (server-side PIN, read from the STAFF_PIN environment variable). The old
-# Basic-Auth block that used to sit here was removed: it duplicated that gate
-# and put a plaintext password in a public repo.
+# (server-side username + password, read from the STAFF_USER and STAFF_PASSWORD
+# environment variables). The Basic-Auth block that used to sit here was
+# removed: it duplicated that gate and put a plaintext password in a public repo.

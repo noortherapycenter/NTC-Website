@@ -1,10 +1,17 @@
 /* ============================================================
    Noor Therapy Center — form submission
-   Adds a "Submit form" bar at the bottom of every fillable form.
-   On submit it renders the COMPLETED form to a real PDF in the
-   browser and posts it to Netlify Forms (form name:
-   "form-submissions"), where email notifications can be enabled.
-   Works for both doc-page HTML forms and PDF-overlay forms.
+   Adds a bar at the bottom of every fillable form: Save PDF,
+   Print, and — when the form is linked to someone — Submit.
+   Submit renders the COMPLETED form to a real PDF in the browser
+   and files it against that person. Works for both doc-page HTML
+   forms and PDF-overlay forms.
+
+   Print and Save PDF never depend on the network, which is the
+   point: the paper path has to keep working when nothing else does.
+
+   Where a submission goes is decided by who it is for — see file()
+   below. This replaced a Netlify Forms POST that mailed a PDF of
+   every completed form, client paperwork included, to one inbox.
    ============================================================ */
 (function () {
   'use strict';
@@ -70,6 +77,39 @@
     '.pdf-capture [data-fill]{background:transparent!important;box-shadow:none!important}' +
     '.pdf-capture .row-del,.pdf-capture .row-grip,.pdf-capture .row-del-col,.pdf-capture .add-row{display:none!important}';
 
+  /* ---------------- Packet context ----------------
+   * Which staff member or client this form belongs to. Loaded lazily so the
+   * 43 form pages do not each need a second script tag.
+   */
+  var P = null;
+
+  function loadPacket() {
+    if (window.NoorPacket) { P = window.NoorPacket; return Promise.resolve(); }
+    return loadScript('/packet.js')
+      .then(function () { P = window.NoorPacket || null; })
+      .catch(function () { P = null; });
+  }
+
+  function formTitle() {
+    return (document.title || 'Form').replace(/\s*[\u2014\u00b7|].*$/, '').trim();
+  }
+
+  // What this form is, and who it is for. `kind` comes from the form's own
+  // catalog entry when it has one, so a client form filed while a staff packet
+  // is open is caught rather than silently misfiled.
+  function context() {
+    var packet = P ? P.get() : null;
+    var info = P ? P.formInfo() : null;
+    var kind = info ? info.kind : (packet ? packet.kind : null);
+    return {
+      packet: packet,
+      info: info,
+      kind: kind,
+      docId: info ? info.doc : '',
+      mismatch: !!(packet && info && info.kind !== packet.kind)
+    };
+  }
+
   ready(function () {
     var st = document.createElement('style');
     st.textContent = css;
@@ -77,40 +117,127 @@
 
     var bar = document.createElement('div');
     bar.className = 'submit-bar no-print';
-    bar.innerHTML =
-      '<div class="sb-note"><strong>Done filling it out?</strong> Submit sends a PDF copy of this completed form to the office.</div>' +
-      '<button type="button" class="sb-btn">Submit form</button>' +
-      '<span class="sb-status"></span>';
     document.body.appendChild(bar);
 
-    var btn = bar.querySelector('.sb-btn');
-    var status = bar.querySelector('.sb-status');
+    var btn, altBtn, printBtn, status;
 
     function say(msg, cls) {
+      if (!status) return;
       status.textContent = msg;
       status.className = 'sb-status' + (cls ? ' ' + cls : '');
       if (msg) status.style.display = 'block';
     }
 
-    btn.addEventListener('click', function () {
-      btn.disabled = true;
-      say('Preparing PDF\u2026');
-      buildPdf().then(function (blob) {
-        say('Sending\u2026');
-        return send(blob);
-      }).then(function () {
-        say('', '');
-        showDone();
-      }).catch(function (err) {
-        say((err && err.message) || 'Something went wrong \u2014 please try again or print the form instead.', 'err');
-      }).then(function () {
-        btn.disabled = false;
+    function note() {
+      var c = context();
+      if (!P) {
+        return '<strong>Print or save this form.</strong> Filing it against a person needs the ' +
+          'staff portal, which this page could not reach.';
+      }
+      if (c.mismatch) {
+        return '<strong>This is a ' + c.info.kind + ' form, but the open packet is a ' +
+          c.packet.kind + '.</strong> Switch the packet in ' +
+          '<a href="/staff-portal/onboarding.html">Onboarding</a> before submitting.';
+      }
+      if (!c.packet) {
+        return '<strong>Not linked to anyone yet.</strong> Choose a person in ' +
+          '<a href="/staff-portal/onboarding.html">Onboarding</a> and this form files itself against ' +
+          'them. You can still print or save a copy now.';
+      }
+      if (c.kind === 'client') {
+        return '<strong>For ' + escapeHtml(c.packet.name) + '.</strong> Submitting records this form ' +
+          'as completed on their file checklist and saves you a PDF copy. The document itself is not ' +
+          'uploaded \u2014 client paperwork stays with the record system and the printed file.';
+      }
+      return '<strong>For ' + escapeHtml(c.packet.name) + '.</strong> Submitting files a PDF of this ' +
+        'completed form against their employee file.';
+    }
+
+    function paint() {
+      var c = context();
+      var blocked = !P || c.mismatch || !c.packet;
+      bar.innerHTML =
+        '<div class="sb-note">' + note() + '</div>' +
+        '<button type="button" class="sb-btn sb-alt-btn">Save PDF</button>' +
+        '<button type="button" class="sb-btn sb-print-btn">Print</button>' +
+        (blocked ? '' : '<button type="button" class="sb-btn">Submit form</button>') +
+        '<span class="sb-status"></span>';
+      btn = bar.querySelector('.sb-btn:not(.sb-alt-btn):not(.sb-print-btn)');
+      altBtn = bar.querySelector('.sb-alt-btn');
+      printBtn = bar.querySelector('.sb-print-btn');
+      status = bar.querySelector('.sb-status');
+
+      printBtn.addEventListener('click', function () { window.print(); });
+
+      altBtn.addEventListener('click', function () {
+        altBtn.disabled = true;
+        say('Preparing PDF\u2026');
+        buildPdf().then(function (blob) {
+          download(blob);
+          say('Saved to your downloads.', 'ok');
+        }).catch(function (err) {
+          say(errText(err), 'err');
+        }).then(function () { altBtn.disabled = false; });
       });
-    });
+
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        var ctx = context();
+        btn.disabled = true;
+        say('Preparing PDF\u2026');
+        buildPdf().then(function (blob) {
+          say(ctx.kind === 'client' ? 'Recording\u2026' : 'Filing\u2026');
+          return file(blob, ctx);
+        }).then(function (result) {
+          say('', '');
+          showDone(result);
+        }).catch(function (err) {
+          say(errText(err), 'err');
+        }).then(function () { btn.disabled = false; });
+      });
+    }
+
+    loadPacket().then(paint);
   });
 
+  function errText(err) {
+    return (err && err.message) ||
+      'Something went wrong \u2014 please try again, or print the form instead.';
+  }
+
+  function escapeHtml(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function safeName() {
+    return formTitle().replace(/[^\w\- ]+/g, '').replace(/\s+/g, ' ').trim() || 'form';
+  }
+
+  function download(blob) {
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = safeName() + '.pdf';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Revoking immediately can cancel the download in some browsers.
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+  }
+
   /* ---------------- Submitted screen ---------------- */
-  function showDone() {
+  function showDone(result) {
+    var who = escapeHtml((result && result.name) || 'this person');
+    var body = (result && result.kind === 'client')
+      ? 'Recorded as completed on ' + who + '\u2019s file checklist, and a PDF copy has been saved to ' +
+        'your downloads. Keep that copy with the client file \u2014 it is not stored on this site.'
+      : 'Filed against ' + who + '\u2019s employee file. You can reopen it any time from the tracker.';
+    if (result && result.ticked === false) {
+      body += ' This form does not map to a checklist item, so nothing was ticked off.';
+    }
+
     var ov = document.createElement('div');
     ov.className = 'sb-done no-print';
     ov.setAttribute('data-screen-label', 'Form submitted screen');
@@ -118,8 +245,8 @@
       '<div class="sd-card">' +
         '<img src="noor-logo.png" alt="Noor Therapy Center"/>' +
         '<div class="sd-check"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"></path></svg></div>' +
-        '<h1>Submitted \u2014 thank you!</h1>' +
-        '<p>Your completed form has been sent to the Noor Therapy Center office. You can safely leave this page.</p>' +
+        '<h1>Done \u2014 thank you!</h1>' +
+        '<p>' + body + '</p>' +
         '<button type="button" class="sd-btn">Back to previous page</button>' +
         '<button type="button" class="sd-stay">Stay on this form</button>' +
       '</div>';
@@ -133,18 +260,71 @@
     });
   }
 
-  /* ---------------- Netlify submission ---------------- */
-  function send(blob) {
-    var title = (document.title || 'Form').replace(/\s*[\u2014\u00b7|].*$/, '').trim();
-    var name = title.replace(/[^\w\- ]+/g, '').replace(/\s+/g, ' ').trim() || 'form';
-    var fd = new FormData();
-    fd.append('form-name', 'form-submissions');
-    fd.append('form-title', title);
-    fd.append('submitted-at', new Date().toLocaleString());
-    fd.append('page', location.pathname);
-    fd.append('completed-pdf', new File([blob], name + '.pdf', { type: 'application/pdf' }));
-    return fetch('/', { method: 'POST', body: fd }).then(function (r) {
-      if (!r.ok) throw new Error('Submission failed (' + r.status + '). It only works on the live website.');
+  /* ---------------- Filing a completed form ----------------
+   *
+   * This replaces the old Netlify Forms POST, which mailed a PDF of EVERY
+   * completed form \u2014 client intakes, medical information, I-9s and direct
+   * deposit details among them \u2014 into the Netlify Forms inbox. Two different
+   * destinations now, decided by who the form is for:
+   *
+   *   staff  -> the PDF is stored against their employee file (/api/documents,
+   *             behind the staff cookie) and the matching checklist item is
+   *             ticked.
+   *   client -> NOTHING is uploaded. The checklist item is ticked and the PDF
+   *             is handed to the person filling it in. Client paperwork is PHI
+   *             and this storage carries no business associate agreement, so
+   *             the document stays with the record system and the paper file.
+   *
+   * Either way the checklist update goes through the inbox in /packet.js, so
+   * it survives a failed network and is applied once by the tracker.
+   */
+  function file(blob, ctx) {
+    if (!P) return Promise.reject(new Error('The staff portal script is not loaded.'));
+    if (!ctx.packet) return Promise.reject(new Error('This form is not linked to anyone yet.'));
+    if (ctx.mismatch) return Promise.reject(new Error('The open packet is for a ' + ctx.packet.kind + '.'));
+
+    var title = formTitle();
+
+    if (ctx.kind === 'client') {
+      // Hand over the copy first: if the download is blocked, the person still
+      // needs to know before the form is marked done.
+      download(blob);
+      if (ctx.docId) {
+        P.markDoc('client', ctx.packet.id, ctx.docId, {
+          note: title + ' completed ' + new Date().toLocaleDateString()
+        });
+      }
+      return Promise.resolve({ kind: 'client', name: ctx.packet.name, ticked: !!ctx.docId });
+    }
+
+    var q = '?kind=staff' +
+      '&entityId=' + encodeURIComponent(ctx.packet.id) +
+      '&entityName=' + encodeURIComponent(ctx.packet.name || '') +
+      '&docId=' + encodeURIComponent(ctx.docId || '') +
+      '&name=' + encodeURIComponent(title);
+
+    return fetch('/api/documents' + q, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: blob
+    }).then(function (r) {
+      return r.json().catch(function () {
+        throw new Error('The server sent back something unreadable.');
+      }).then(function (body) {
+        if (r.status === 401) {
+          throw new Error('Your staff session has expired \u2014 reload and sign in, then submit again.');
+        }
+        if (!r.ok || !body.ok) throw new Error((body && body.error) || 'Could not file this form.');
+        return body;
+      });
+    }).then(function (body) {
+      if (ctx.docId) {
+        P.markDoc('staff', ctx.packet.id, ctx.docId, {
+          note: title + ' filed ' + new Date().toLocaleDateString(),
+          file: { id: body.id, name: title }
+        });
+      }
+      return { kind: 'staff', name: ctx.packet.name, ticked: !!ctx.docId };
     });
   }
 

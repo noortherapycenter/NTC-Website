@@ -996,13 +996,15 @@
 <script type="text/babel" src="src/areas.jsx"></script>
 <script type="text/babel" src="src/contact.jsx"></script>
 <script type="text/babel" src="src/app.jsx"></script>
-<!-- Netlify Forms registration for staff-portal form submissions (hidden) -->
-<form name="form-submissions" data-netlify="true" netlify-honeypot="bot-field" hidden>
-  <input type="text" name="form-title"/>
-  <input type="text" name="submitted-at"/>
-  <input type="text" name="page"/>
-  <input type="text" name="bot-field"/>
-  <input type="file" name="completed-pdf"/>
-</form>
+<!--
+  The "form-submissions" Netlify Forms registration that used to sit here has
+  been removed. It backed the old staff-portal flow, which mailed a PDF of
+  every completed fillable form — client intakes, medical information, I-9s
+  and direct deposit details included — into the Netlify Forms inbox.
+  Completed forms now go to netlify/edge-functions/documents.js for staff, and
+  are recorded without being uploaded for clients. See Fillable Forms/submit.js.
+  Submissions already collected under that form name still exist in the Netlify
+  dashboard and have to be cleared there.
+-->
 </body>
 </html>

@@ -13,11 +13,35 @@
   --ok-bg: #eef7ea;
 }
 
-/* ---- Tabs ---- */
-.tk-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 22px; border-bottom: 1.5px solid var(--line); padding-bottom: 12px; }
+/* ---- Navigation, two levels ----
+   Level one is the section (who the records are about); level two is the view
+   within it. The section row is the heavier of the two so the eye lands there
+   first, and the sub-row is only drawn when a section holds more than one
+   view. */
+.tk-nav {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px;
+  border-bottom: 1.5px solid var(--line); padding-bottom: 12px;
+}
+.tk-nav a {
+  position: relative; text-decoration: none; color: var(--muted);
+  font-size: 14.5px; font-weight: 800; letter-spacing: -0.01em;
+  padding: 9px 18px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1.5px solid transparent;
+}
+.tk-nav a:hover { color: var(--ink); background: var(--surface-2); }
+.tk-nav a.active { color: var(--okc); background: var(--ok-bg); border-color: var(--green); }
+.tk-nav .tk-dot {
+  min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px;
+  background: var(--over); color: #fff; font-size: 10.5px; font-weight: 800;
+  display: inline-grid; place-items: center;
+}
+
+/* ---- Tabs (level two) ---- */
+.tk-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 22px; padding-bottom: 0; }
 .tk-tabs a {
   position: relative; text-decoration: none; color: var(--muted);
-  font-size: 13.5px; font-weight: 700; padding: 8px 14px; border-radius: 999px;
+  font-size: 13px; font-weight: 700; padding: 7px 13px; border-radius: 999px;
   display: inline-flex; align-items: center; gap: 7px;
 }
 .tk-tabs a:hover { color: var(--ink); background: var(--surface-2); }
@@ -299,7 +323,7 @@
 
 /* ---- Print: the on-screen controls are noise on paper ---- */
 @media print {
-  .tk-tabs, .tk-head-actions, .tk-toolbar, .tk-actions, .tk-actions-h,
+  .tk-nav, .tk-tabs, .tk-head-actions, .tk-toolbar, .tk-actions, .tk-actions-h,
   .tk-modal, .tk-toast, .tk-additem, .tk-x, .tk-mini { display: none !important; }
   .tk-tablewrap { overflow: visible; border: 0; }
   .tk-due-row, .tk-list, .tk-stat, .tk-empty, .tk-note { break-inside: avoid; }
@@ -335,12 +359,8 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
   body.tk-page .tk-lists { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); }
 }
 
-/* ---- Tab group separators (14 sections is a lot to scan) ---- */
-.tk-tabs a.tk-sep { margin-left: 14px; position: relative; }
-.tk-tabs a.tk-sep::before {
-  content: ""; position: absolute; left: -8px; top: 50%; transform: translateY(-50%);
-  width: 1.5px; height: 18px; background: var(--line);
-}
+/* The tk-sep separators that used to break up one long tab row are gone —
+   the section row does that job now, with names instead of dividers. */
 
 /* ---- File checklists: roster ---- */
 .tk-filelist { display: grid; gap: 8px; }
@@ -401,3 +421,60 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
   .tk-doc .tk-notebtn { grid-column: 2; justify-self: start; }
   .tk-filerow .tk-progress { width: 80px; }
 }
+
+/* ---- Client supervision -----------------------------------------------
+   Required vs. provided, stated the way the payer states it. The three
+   figures read left to right as a sentence: this much therapy happened,
+   this much supervision was owed, this much was delivered. */
+.tk-sup-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 10px; margin-bottom: 14px;
+}
+.tk-sup-fig {
+  background: var(--surface); border: 1.5px solid var(--line); border-radius: 14px;
+  padding: 15px 18px;
+}
+.tk-sup-fig .tk-sup-k {
+  display: block; font-size: 10.5px; font-weight: 800; letter-spacing: 0.11em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: 7px;
+}
+.tk-sup-fig strong { display: block; font-size: 21px; font-weight: 800; letter-spacing: -0.02em; color: var(--ink); }
+.tk-sup-fig small { display: block; margin-top: 4px; font-size: 11.5px; color: var(--muted); line-height: 1.45; }
+
+/* The provided figure is the one that carries a verdict. */
+.tk-sup-fig.tk-ok   { border-color: var(--green); background: var(--ok-bg); }
+.tk-sup-fig.tk-soon { border-color: var(--orange); background: var(--soon-bg); }
+.tk-sup-fig.tk-over { border-color: var(--over); background: var(--over-bg); }
+.tk-sup-fig.tk-ok strong   { color: var(--okc); }
+.tk-sup-fig.tk-soon strong { color: var(--soon); }
+.tk-sup-fig.tk-over strong { color: var(--over); }
+
+/* The progress bar defaults to green; a short month should not read as fine. */
+.tk-progress span.tk-soon { background: var(--orange); }
+.tk-progress span.tk-over { background: var(--over); }
+
+.tk-sup-log td { white-space: nowrap; }
+.tk-sup-log td:first-child { white-space: normal; }
+
+@media (max-width: 620px) {
+  .tk-sup-fig strong { font-size: 18px; }
+}
+
+/* ---- Print: the supervision month is the one page staff hand over ----
+   Keep the figures and the full log, drop the controls. */
+@media print {
+  .tk-sup-fig { break-inside: avoid; border-color: #999; background: transparent; }
+  .tk-sup-fig strong { color: #000; }
+  .tk-sup-summary { break-inside: avoid; }
+  .tk-sup-log { font-size: 11px; }
+  .tk-sup-log tr { break-inside: avoid; }
+  .page-back, .tk-note a { display: none !important; }
+}
+
+/* ---- File checklist: trailing controls share one grid cell ----
+   The row is a 4-column grid; grouping the note button and the stored-PDF
+   link keeps a fifth control from wrapping onto its own line. */
+.tk-doc-acts { display: flex; align-items: center; gap: 8px; }
+.tk-doc-acts .tk-docfile { text-decoration: none; color: var(--green-dark); border-color: var(--green); }
+.tk-doc-acts .tk-docfile:hover { background: var(--ok-bg); }
+@media print { .tk-doc-acts { display: none !important; } }

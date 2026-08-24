@@ -21,8 +21,11 @@ const MAX_BYTES = 2 * 1024 * 1024;
 // Modules the client is allowed to sync. Keep in step with MODULES in tracker.js.
 const ALLOWED = new Set([
   "staff", "clients", "training", "credentials", "renewals",
-  "reminders", "checklists", "auths", "supervision", "contacts",
-  "empfiles", "clientfiles",
+  "reminders", "checklists", "auths", "contacts",
+  "empfiles", "clientfiles", "clientsup",
+  // Retired. Kept only so the tracker's one-time sweep can DELETE what the
+  // old staff Supervision & Observation module left here. Nothing writes it.
+  "supervision",
 ]);
 
 const enc = new TextEncoder();
@@ -129,6 +132,23 @@ export default async (request) => {
       return json({ ok: false, error: "write failed: " + e.message }, 502);
     }
     return json({ ok: true, module: mod, records, rev: next.rev });
+  }
+
+  // Remove a module's stored copy outright.
+  //
+  // Deliberately NOT a bulk tombstone: a tombstone carries a fresh updatedAt,
+  // so it would outrank the browser's own records and wipe them the moment the
+  // module was shared again. Deleting the blob leaves nothing to out-rank, and
+  // a browser that still holds the records can re-publish them intact.
+  if (request.method === "DELETE") {
+    const mod = url.searchParams.get("module") || "";
+    if (!ALLOWED.has(mod)) return json({ ok: false, error: "unknown module" }, 400);
+    try {
+      await store.delete(mod);
+    } catch (e) {
+      return json({ ok: false, error: "delete failed: " + e.message }, 502);
+    }
+    return json({ ok: true, module: mod, deleted: true });
   }
 
   return json({ ok: false, error: "method not allowed" }, 405);
