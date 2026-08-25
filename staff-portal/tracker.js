@@ -354,6 +354,46 @@
     return !end || daysUntil(end) >= 0;
   }
 
+  // Supervision is now client-first: #clientsup -> #clientsup:<client> ->
+  // #clientsup:<client>:<monthRecordId>. The client segment is the client's
+  // name, URI-encoded, so it never collides with the ':' separator and works
+  // for records whose client is not (or no longer) on the roster.
+  function supKey(name) { return encodeURIComponent(String(name || '')); }
+  function supName(key) {
+    try { return decodeURIComponent(String(key || '')); } catch (e) { return String(key || ''); }
+  }
+  function supHash(r) { return 'clientsup:' + supKey(r.client) + ':' + r.id; }
+
+  // Every client with supervision records, plus every active roster client,
+  // each appearing exactly once.
+  function supClients() {
+    var seen = {}, out = [];
+    Store.all('clientsup').forEach(function (r) {
+      var nm = r.client || 'Unnamed client';
+      if (!seen[nm]) { seen[nm] = { name: nm, rows: [] }; out.push(seen[nm]); }
+      seen[nm].rows.push(r);
+    });
+    Store.all('clients').forEach(function (c) {
+      if (c.active === false || !c.name || seen[c.name]) return;
+      seen[c.name] = { name: c.name, rows: [] };
+      out.push(seen[c.name]);
+    });
+    return out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  }
+
+  // Totals across one client's months, so the top row can say something useful
+  // without opening anything.
+  function supRollup(rows) {
+    var req = 0, prov = 0, short = 0, closedShort = 0;
+    rows.forEach(function (r) {
+      var st = supStats(r);
+      req += st.required; prov += st.provided;
+      if (!supOpen(r) && st.short > 0) { short += st.short; closedShort++; }
+    });
+    return { required: req, provided: prov, short: short, closedShort: closedShort,
+             pct: req ? Math.min(100, Math.round((prov / req) * 100)) : 100 };
+  }
+
   function supTitle(r) {
     return (r.client || 'Unnamed client') + ' — ' + monthLabel(r.month);
   }
@@ -902,7 +942,7 @@
         '<div class="tk-filelist">';
       supShort.forEach(function (r) {
         var st = supStats(r);
-        h += '<a class="tk-filerow" href="#clientsup:' + esc(r.id) + '" data-jump="clientsup:' + esc(r.id) + '">' +
+        h += '<a class="tk-filerow" href="#' + esc(supHash(r)) + '" data-jump="' + esc(supHash(r)) + '">' +
           '<span class="tk-due-main"><strong>' + esc(r.client || 'Unnamed client') + '</strong>' +
           '<small>' + esc(monthLabel(r.month)) + ' closed ' + esc(hm(st.short)) + ' short</small></span>' +
           '<span class="tk-badge tk-over">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
@@ -1307,18 +1347,19 @@
     var head = '<div class="tk-head"><div><h2>' + esc(def.label) + '</h2>' +
       '<p class="tk-sub">' + esc(def.blurb) + '</p></div>' +
       '<div class="tk-head-actions">' + syncChip('clientsup') +
-      '<button type="button" class="tk-btn tk-primary" data-supadd="1">+ Month</button>' +
+      '<button type="button" class="tk-btn tk-primary" data-supadd="">+ Month</button>' +
       '</div></div>';
 
     /* ---------------- one month open: the report ---------------- */
-    if (currentId) {
-      var r = Store.get('clientsup', currentId);
-      if (!r) { location.hash = 'clientsup'; return head; }
+    if (currentSub) {
+      var r = Store.get('clientsup', currentSub);
+      if (!r) { location.hash = 'clientsup:' + currentId; return head; }
       var st = supStats(r);
       var open = supOpen(r);
       var tone = supTone(r);
 
-      var h = '<a class="page-back" href="#clientsup" data-jump="clientsup">&larr; All supervision months</a>' +
+      var h = '<a class="page-back" href="#clientsup:' + esc(currentId) + '" data-jump="clientsup:' +
+        esc(currentId) + '">&larr; ' + esc(supName(currentId) || 'All clients') + '</a>' +
         '<div class="tk-head"><div><h2>' + esc(r.client || 'Unnamed client') + '</h2>' +
         '<p class="tk-sub">' + esc(monthLabel(r.month)) +
         (r.qsp ? ' &middot; Primary BCBA / QSP ' + esc(r.qsp) : '') +
@@ -1327,6 +1368,7 @@
         '<button type="button" class="tk-btn" data-supedit="' + esc(r.id) + '">Edit details</button>' +
         '<button type="button" class="tk-btn tk-x" data-supdel="' + esc(r.id) + '">Delete</button>' +
         '<button type="button" class="tk-btn" data-supprint="1">Print</button>' +
+        '<button type="button" class="tk-btn" data-sespaste="' + esc(r.id) + '">Paste sessions</button>' +
         '<button type="button" class="tk-btn tk-primary" data-sesadd="' + esc(r.id) + '">+ Session</button>' +
         '</div></div>';
 
@@ -1394,33 +1436,91 @@
         '</div>';
     }
 
+    /* ---------------- one client open: their months ---------------- */
+    if (currentId) {
+      var who = supName(currentId);
+      var mine = rows.filter(function (x) { return (x.client || 'Unnamed client') === who; });
+
+      // An older two-segment link (#clientsup:<recordId>) still resolves.
+      if (!mine.length) {
+        var legacy = Store.get('clientsup', currentId);
+        if (legacy) { location.hash = supHash(legacy); return head; }
+      }
+
+      var roll = supRollup(mine);
+      var h1 = '<a class="page-back" href="#clientsup" data-jump="clientsup">&larr; All clients</a>' +
+        '<div class="tk-head"><div><h2>' + esc(who) + '</h2>' +
+        '<p class="tk-sub">' + mine.length + ' month' + (mine.length === 1 ? '' : 's') +
+        ' &middot; ' + esc(hm(roll.provided)) + ' provided of ' + esc(hm(roll.required)) + ' required' +
+        (roll.closedShort ? ' &middot; ' + roll.closedShort + ' closed short' : '') +
+        '</p></div><div class="tk-head-actions">' +
+        '<button type="button" class="tk-btn tk-primary" data-supadd="' + esc(who) + '">+ Month</button>' +
+        '</div></div>';
+
+      if (!mine.length) {
+        return h1 + '<div class="tk-empty"><strong>No supervision months for ' + esc(who) + ' yet.</strong> ' +
+          'Add one, then log that month\u2019s sessions inside it.</div>';
+      }
+
+      h1 += '<div class="tk-filelist">';
+      mine.forEach(function (r) { h1 += supMonthRow(r); });
+      return h1 + '</div>';
+    }
+
+    /* ---------------- every client, exactly once ---------------- */
+    var people = supClients();
     var short = supShortfalls().length;
     var h2 = head;
     if (short) {
       h2 += '<p class="tk-note tk-note-warn"><strong>' + short + ' closed month' +
         (short === 1 ? '' : 's') + ' ended short of the supervision requirement.</strong> ' +
-        'Those rows are marked below.</p>';
+        'Open the client to see which.</p>';
+    }
+
+    if (!people.length) {
+      return h2 + '<div class="tk-empty"><strong>No clients yet.</strong> ' +
+        'Add them on the <a href="#clients" data-jump="clients">Clients</a> tab, ' +
+        'then give each one a supervision month.</div>';
     }
 
     h2 += '<div class="tk-filelist">';
-    rows.forEach(function (r) {
-      var st = supStats(r);
-      var tone = supTone(r);
-      var note = st.short
-        ? hm(st.short) + ' short' + (supOpen(r) ? ' — month still open' : '')
-        : 'Requirement met';
-      h2 += '<a class="tk-filerow" href="#clientsup:' + esc(r.id) + '" data-jump="clientsup:' + esc(r.id) + '">' +
-        '<span class="tk-due-main"><strong>' + esc(r.client || 'Unnamed client') + '</strong>' +
-        '<small>' + esc(monthLabel(r.month)) + ' &middot; ' + esc(note) + '</small></span>' +
-        '<span class="tk-progress"><span class="tk-' + tone + '" style="width:' + st.pct + '%"></span></span>' +
-        '<span class="tk-badge tk-' + tone + '">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
+    people.forEach(function (c) {
+      var roll = supRollup(c.rows);
+      var tone = roll.closedShort ? 'over' : (roll.required && roll.pct < 100 ? 'soon' : 'ok');
+      var note = !c.rows.length ? 'No supervision months yet'
+        : c.rows.length + ' month' + (c.rows.length === 1 ? '' : 's') +
+          (roll.closedShort ? ' \u00b7 ' + hm(roll.short) + ' short across ' + roll.closedShort + ' closed'
+                            : ' \u00b7 requirement met');
+      h2 += '<a class="tk-filerow" href="#clientsup:' + esc(supKey(c.name)) + '" ' +
+        'data-jump="clientsup:' + esc(supKey(c.name)) + '">' +
+        '<span class="tk-due-main"><strong>' + esc(c.name) + '</strong>' +
+        '<small>' + esc(note) + '</small></span>' +
+        '<span class="tk-progress"><span class="tk-' + tone + '" style="width:' + roll.pct + '%"></span></span>' +
+        '<span class="tk-badge tk-' + tone + '">' +
+        (c.rows.length ? esc(hm(roll.provided)) + ' / ' + esc(hm(roll.required)) : '\u2014') +
+        '</span></a>';
     });
     return h2 + '</div>';
   }
 
+  // One month row, used inside a client. Unchanged from the flat list it
+  // replaced, except that the link now carries the client segment.
+  function supMonthRow(r) {
+    var st = supStats(r);
+    var tone = supTone(r);
+    var note = st.short
+      ? hm(st.short) + ' short' + (supOpen(r) ? ' \u2014 month still open' : '')
+      : 'Requirement met';
+    return '<a class="tk-filerow" href="#' + esc(supHash(r)) + '" data-jump="' + esc(supHash(r)) + '">' +
+      '<span class="tk-due-main"><strong>' + esc(monthLabel(r.month)) + '</strong>' +
+      '<small>' + esc(note) + '</small></span>' +
+      '<span class="tk-progress"><span class="tk-' + tone + '" style="width:' + st.pct + '%"></span></span>' +
+      '<span class="tk-badge tk-' + tone + '">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
+  }
+
   /* ---- editors ---- */
 
-  function openSupEditor(id) {
+  function openSupEditor(id, presetClient) {
     var rec = id ? Store.get('clientsup', id) : null;
     var clients = Store.all('clients').map(function (c) { return c.name; }).sort();
     var staff = Store.all('staff').map(function (s) { return s.name; }).sort();
@@ -1438,7 +1538,7 @@
 
     var d = rec ? Math.max(0, +rec.directMin || 0) : 0;
     var body = '<div class="tk-form-grid">' +
-      sel('client', 'Client', clients, rec ? rec.client : '', true) +
+      sel('client', 'Client', clients, rec ? rec.client : (presetClient || ''), true) +
       '<div class="tk-f"><label for="f_month">Month <em>*</em></label>' +
         '<input type="month" id="f_month" name="month" required value="' +
         esc(rec ? rec.month : thisMonth()) + '"/></div>' +
@@ -1481,9 +1581,212 @@
       next.directMin = Math.max(0, (+form.elements.dh.value || 0) * 60 + (+form.elements.dm.value || 0));
       Store.save('clientsup', next);
       flash('Supervision month saved.');
-      if (!id) location.hash = 'clientsup:' + next.id;
+      if (!id) location.hash = supHash(next);
       return true;
     });
+  }
+
+  /* -------------------------------------------------------- bulk paste
+   * A busy month is tedious one session at a time, so this takes a paste from
+   * a spreadsheet, a CSV, or loose text. Nothing is written until the parsed
+   * preview has been seen: rows that cannot be read, or that fall outside the
+   * month, are shown as rejected rather than quietly dropped.
+   */
+  function pIsoFrom(y, m, d) {
+    if (!(m >= 1 && m <= 12)) return '';
+    var last = new Date(y, m, 0).getDate();
+    if (!(d >= 1 && d <= last)) return '';
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+
+  var P_MON = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+
+  function pDate(tok, month, allowBareDay) {
+    tok = String(tok == null ? '' : tok).trim();
+    if (!tok) return '';
+    var mp = /^(\d{4})-(\d{2})$/.exec(month || '');
+    var defY = mp ? +mp[1] : new Date().getFullYear();
+    var defM = mp ? +mp[2] : new Date().getMonth() + 1;
+    var m;
+    if ((m = tok.match(/^(\d{4})[-\/](\d{1,2})[-\/](\d{1,2})$/))) return pIsoFrom(+m[1], +m[2], +m[3]);
+    if ((m = tok.match(/^(\d{1,2})[-\/](\d{1,2})(?:[-\/](\d{2,4}))?$/))) {
+      var y = m[3] ? (+m[3] < 100 ? 2000 + +m[3] : +m[3]) : defY;
+      return pIsoFrom(y, +m[1], +m[2]);
+    }
+    if ((m = tok.match(/^([a-z]{3,9})\.?\s+(\d{1,2})(?:,?\s*(\d{4}))?$/i))) {
+      var mi = P_MON.indexOf(m[1].slice(0, 3).toLowerCase());
+      if (mi >= 0) return pIsoFrom(m[3] ? +m[3] : defY, mi + 1, +m[2]);
+    }
+    if ((m = tok.match(/^(\d{1,2})\s+([a-z]{3,9})\.?(?:,?\s*(\d{4}))?$/i))) {
+      var mj = P_MON.indexOf(m[2].slice(0, 3).toLowerCase());
+      if (mj >= 0) return pIsoFrom(m[3] ? +m[3] : defY, mj + 1, +m[1]);
+    }
+    // A bare day number is only a date when a header said the column is one.
+    if (allowBareDay && (m = tok.match(/^(\d{1,2})$/))) return pIsoFrom(defY, defM, +m[1]);
+    return '';
+  }
+
+  // "9", "9:30", "9am", "2:30 PM" -> "HH:MM", matching <input type="time">.
+  function pClock(tok) {
+    var t = String(tok == null ? '' : tok).trim().toLowerCase().replace(/\s+/g, '').replace(/\./g, '');
+    var m = t.match(/^(\d{1,2})(?::(\d{2}))?(am|pm)?$/);
+    if (!m) return '';
+    var h = +m[1], mm = m[2] ? +m[2] : 0;
+    if (mm > 59) return '';
+    if (m[3]) {
+      if (h < 1 || h > 12) return '';
+      if (m[3] === 'pm' && h !== 12) h += 12;
+      if (m[3] === 'am' && h === 12) h = 0;
+    } else if (h > 23) return '';
+    return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+  }
+
+  // "9:00-10:30", "9am to 10:30am" — en/em dashes included.
+  function pRange(tok) {
+    var t = String(tok == null ? '' : tok).replace(/[‐-―−]/g, '-');
+    var parts = t.split(/\s*(?:-|to)\s*/i);
+    if (parts.length !== 2) return null;
+    var a = pClock(parts[0]), b = pClock(parts[1]);
+    return (a && b) ? { start: a, end: b } : null;
+  }
+
+  function parseSupPaste(text, month) {
+    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+    if (!lines.length) return [];
+
+    var delim = null;
+    if (lines[0].indexOf('\t') >= 0) delim = '\t';
+    else if (lines[0].split(',').length >= 2) delim = ',';
+    function cells(l) {
+      return (delim ? l.split(delim) : l.trim().split(/\s{2,}/)).map(function (t) { return t.trim(); });
+    }
+
+    var first = cells(lines[0]).map(function (c) { return c.toLowerCase(); });
+    var map = null;
+    if (first.some(function (c) { return /^(date|day)\b/.test(c); })) {
+      map = {};
+      first.forEach(function (c, i) {
+        if (map.date == null && /date|day/.test(c)) map.date = i;
+        else if (map.start == null && /start|from|in\b/.test(c)) map.start = i;
+        else if (map.end == null && /end|to\b|out\b/.test(c)) map.end = i;
+        else if (map.range == null && /time|hours|span/.test(c)) map.range = i;
+        else if (map.supervisor == null && /supervisor|staff|qsp|bcba|provider|by/.test(c)) map.supervisor = i;
+        else if (map.code == null && /code|type|service|activity/.test(c)) map.code = i;
+      });
+    }
+
+    return (map ? lines.slice(1) : lines).map(function (l) {
+      var c = cells(l);
+      var out = { raw: l.trim(), date: '', supervisor: '', code: '', start: '', end: '', why: '' };
+
+      if (map) {
+        out.date = pDate(c[map.date], month, true);
+        if (map.supervisor != null) out.supervisor = c[map.supervisor] || '';
+        if (map.code != null) out.code = c[map.code] || '';
+        if (map.start != null) out.start = pClock(c[map.start]);
+        if (map.end != null) out.end = pClock(c[map.end]);
+        if ((!out.start || !out.end) && map.range != null) {
+          var rg = pRange(c[map.range]);
+          if (rg) { out.start = rg.start; out.end = rg.end; }
+        }
+      } else {
+        var rest = [];
+        c.forEach(function (tok) {
+          if (!out.date) { var d = pDate(tok, month, false); if (d) { out.date = d; return; } }
+          if (!out.start) { var rg = pRange(tok); if (rg) { out.start = rg.start; out.end = rg.end; return; } }
+          rest.push(tok);
+        });
+        // A loose row may still carry two separate clock tokens.
+        if (!out.start) {
+          var clocks = [];
+          rest = rest.filter(function (tok) {
+            var t = pClock(tok);
+            if (t && clocks.length < 2) { clocks.push(t); return false; }
+            return true;
+          });
+          if (clocks.length === 2) { out.start = clocks[0]; out.end = clocks[1]; }
+        }
+        out.supervisor = rest.shift() || '';
+        out.code = rest.shift() || '';
+      }
+
+      if (!out.date) out.why = 'no date found';
+      else if (!out.start || !out.end) out.why = 'need a start and an end time';
+      else if (!minsBetween(out.start, out.end)) out.why = 'end is not after start';
+      else if (month && (out.date < monthStart(month) || out.date > monthEnd(month))) {
+        out.why = 'outside ' + monthLabel(month);
+      }
+      out.ok = !out.why;
+      out.mins = out.ok ? minsBetween(out.start, out.end) : 0;
+      return out;
+    });
+  }
+
+  function openSupPaste(recId) {
+    var rec = Store.get('clientsup', recId);
+    if (!rec) return;
+    var parsed = [];
+
+    var body = '<div class="tk-paste">' +
+      '<p class="tk-modal-note">Paste sessions for <strong>' + esc(rec.client || 'this client') +
+      '</strong>, ' + esc(monthLabel(rec.month)) + '. One per line, from a spreadsheet, a CSV, or typed out. ' +
+      'A header row is used to work out the columns if there is one.</p>' +
+      '<textarea id="tk-sup-in" spellcheck="false" placeholder="Date\tSupervisor\tStart\tEnd' +
+      '&#10;' + esc(monthStart(rec.month).slice(5).replace('-', '/')) + '\tAmina\t9:00am\t10:00am' +
+      '&#10;' + esc(monthStart(rec.month).slice(5).replace('-', '/')) + '\tAmina\t2:00pm\t3:30pm"></textarea>' +
+      '<p class="tk-hint">Understood: <strong>dates</strong> as 8/4, 8/4/2026, 2026-08-04 or Aug 4 &middot; ' +
+      '<strong>times</strong> as 9:00, 9am, 2:30 PM, or a range like 9:00–10:30 &middot; plus supervisor and type. ' +
+      'Sessions must fall inside ' + esc(monthLabel(rec.month)) + '.</p>' +
+      '<div id="tk-sup-preview"></div></div>';
+
+    showModal('Paste sessions', body, function () {
+      var good = parsed.filter(function (r) { return r.ok; });
+      if (!good.length) return 'Nothing to import yet — paste some rows above.';
+      var live = Store.get('clientsup', recId);
+      if (!live) return 'That supervision month no longer exists.';
+      var next = Object.assign({}, live);
+      next.sessions = (live.sessions || []).slice();
+      good.forEach(function (r) {
+        next.sessions.push({ id: uid(), supervisor: r.supervisor, date: r.date,
+                             code: r.code, codeOther: '', start: r.start, end: r.end });
+      });
+      Store.save('clientsup', next);
+      flash('Imported ' + good.length + ' session' + (good.length === 1 ? '' : 's') + '.');
+      return true;
+    }, 'Import');
+
+    var ta = document.getElementById('tk-sup-in');
+    var pv = document.getElementById('tk-sup-preview');
+    var okBtn = modal.querySelector('.tk-ok');
+
+    function refresh() {
+      parsed = parseSupPaste(ta.value, rec.month);
+      var good = parsed.filter(function (r) { return r.ok; });
+      okBtn.textContent = good.length ? 'Import ' + good.length : 'Import';
+      if (!parsed.length) { pv.innerHTML = ''; return; }
+
+      var total = good.reduce(function (n, r) { return n + r.mins; }, 0);
+      var h = '<div class="tk-preview"><table><thead><tr>' +
+        '<th>Date</th><th>Supervisor</th><th>Type</th><th>Time</th><th>Length</th></tr></thead><tbody>';
+      parsed.slice(0, 60).forEach(function (r) {
+        if (!r.ok) {
+          h += '<tr class="bad"><td colspan="5">' + esc(r.why) + ' &mdash; ' + esc(r.raw.slice(0, 70)) + '</td></tr>';
+          return;
+        }
+        h += '<tr><td class="k">' + esc(fmtDate(r.date)) + '</td><td>' + esc(r.supervisor || '—') + '</td>' +
+          '<td>' + esc(r.code || '—') + '</td>' +
+          '<td>' + esc(fmtTime(r.start)) + '–' + esc(fmtTime(r.end)) + '</td>' +
+          '<td>' + esc(hm(r.mins)) + '</td></tr>';
+      });
+      h += '</tbody></table></div><p class="tk-hint">' + good.length + ' of ' + parsed.length +
+        ' row' + (parsed.length === 1 ? '' : 's') + ' ready' +
+        (parsed.length > 60 ? ' (showing the first 60)' : '') +
+        (good.length ? ' &middot; ' + esc(hm(total)) + ' of supervision' : '') + '.</p>';
+      pv.innerHTML = h;
+    }
+
+    ta.addEventListener('input', refresh);
+    ta.addEventListener('paste', function () { setTimeout(refresh, 0); });
   }
 
   function openSessionEditor(recId, sesId) {
@@ -2016,7 +2319,7 @@
     return SECTIONS[0];
   }
 
-  var root, current = 'dashboard', currentId = '';
+  var root, current = 'dashboard', currentId = '', currentSub = '';
 
   /* Embedded mode.
    * The portal home page mounts the dashboard on its own, with no tab bar —
@@ -2029,9 +2332,9 @@
     var raw = (location.hash || '').replace(/^#/, '');
     var bits = raw.split(':');
     for (var i = 0; i < TABS.length; i++) {
-      if (TABS[i].k === bits[0]) return { tab: bits[0], id: bits[1] || '' };
+      if (TABS[i].k === bits[0]) return { tab: bits[0], id: bits[1] || '', sub: bits[2] || '' };
     }
-    return { tab: 'dashboard', id: '' };
+    return { tab: 'dashboard', id: '', sub: '' };
   }
 
   // Badge each tab with how many of its rows are overdue. One sweep, counted
@@ -2095,6 +2398,7 @@
     var at = currentTab();
     current = at.tab;
     currentId = at.id;
+    currentSub = at.sub;
 
     // A full re-render would drop the caret out of the filter box mid-typing.
     var active = document.activeElement;
@@ -2191,10 +2495,11 @@
           });
         return;
       }
-      if ((el = e.target.closest('[data-supadd]'))) { openSupEditor(''); return; }
+      if ((el = e.target.closest('[data-supadd]'))) { openSupEditor('', el.dataset.supadd || ''); return; }
       if ((el = e.target.closest('[data-supedit]'))) { openSupEditor(el.dataset.supedit); return; }
       if ((el = e.target.closest('[data-supprint]'))) { window.print(); return; }
       if ((el = e.target.closest('[data-sesadd]'))) { openSessionEditor(el.dataset.sesadd, ''); return; }
+      if ((el = e.target.closest('[data-sespaste]'))) { openSupPaste(el.dataset.sespaste); return; }
       if ((el = e.target.closest('[data-sesedit]'))) {
         var se = el.dataset.sesedit.split('|');
         openSessionEditor(se[0], se[1]);

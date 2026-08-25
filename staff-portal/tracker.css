@@ -478,3 +478,31 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
 .tk-doc-acts .tk-docfile { text-decoration: none; color: var(--green-dark); border-color: var(--green); }
 .tk-doc-acts .tk-docfile:hover { background: var(--ok-bg); }
 @media print { .tk-doc-acts { display: none !important; } }
+
+/* ---- Breathing room below every section ----------------------------------
+   Sections only had a top margin, so whatever followed the last one sat hard
+   against it — the file rows on the dashboard were touching what came next. */
+.tk-group { margin-bottom: 34px; }
+.tk-group:last-child { margin-bottom: 8px; }
+.tk-panel { padding-bottom: 28px; }
+.tk-due, .tk-filelist, .tk-lists, .tk-docs { margin-bottom: 6px; }
+
+/* ---- Paste importer ---- */
+.tk-paste textarea {
+  width: 100%; min-height: 170px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12.5px; line-height: 1.6; color: var(--ink);
+  background: var(--surface-2); border: 1.5px solid var(--line); border-radius: 12px; padding: 12px 14px;
+  outline: none; resize: vertical;
+}
+.tk-paste textarea:focus { border-color: var(--green); background: var(--surface); }
+.tk-paste .tk-hint { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 10px 0 0; }
+.tk-preview { max-height: 260px; overflow: auto; margin-top: 14px; border: 1.5px solid var(--line); border-radius: 12px; }
+.tk-preview table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tk-preview th {
+  position: sticky; top: 0; background: var(--surface); text-align: left;
+  font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+  padding: 9px 11px; border-bottom: 1.5px solid var(--line);
+}
+.tk-preview td { padding: 8px 11px; border-bottom: 1px solid var(--line); color: var(--muted); }
+.tk-preview tr.bad td { background: var(--over-bg); color: var(--over); }
+.tk-preview td.k { color: var(--ink); font-weight: 700; }

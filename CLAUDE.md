@@ -57,6 +57,19 @@
   - `forms/` (the PUBLIC client-facing forms — apply, intake, deposit) is a SEPARATE flow that still
     posts to Netlify Forms under its own form names. It was left alone: those are filled in by
     clients who cannot authenticate. `online-intake` in particular collects client PHI.
+- Client Supervision navigates client-first, three levels deep in the hash:
+  `#clientsup` (every client, exactly once) -> `#clientsup:<uriEncodedClientName>` (that client's
+  months) -> `#clientsup:<client>:<recordId>` (the month report). The client segment is the client
+  NAME uri-encoded, not a roster id, so records whose client left the roster still group correctly;
+  `supKey`/`supName`/`supHash` convert. A two-segment `#clientsup:<recordId>` link from before this
+  change still resolves — the client level detects it and redirects. Grouping is by name, so
+  renaming a client in the roster does NOT move their existing supervision months.
+- "Paste sessions" inside a month (`parseSupPaste`) accepts a spreadsheet/CSV/text paste. It detects
+  the delimiter, uses the first row as a header when it starts with a date column, and otherwise
+  reads each field by shape. Dates: 8/4, 8/4/2026, 2026-08-04, Aug 4. Times: 9:00, 9am, 2:30 PM, or
+  a range like 9:00-10:30. It enforces the same rules the single-session editor does — end after
+  start, date inside the month — and shows rejected rows with the reason rather than dropping them.
+  Nothing is written until the preview is confirmed.
 - Client Supervision tracker tab (`clientsup` in `tracker.js`, registered in `SUPS`). One record per
   client per month, replacing the Passage Health clinical supervision report: direct therapy hours
   drive the hours required, the session log (supervisor, date, H0032/97155, start, end) drives the
