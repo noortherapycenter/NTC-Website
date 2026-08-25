@@ -141,3 +141,10 @@
     `&force=1` ignores the escalation state. A bare POST is treated as the schedule and can only do
     the ordinary thing; `force` and `dry` always require the key so the URL cannot be used as a
     mail loop.
+- Supervision shortfalls deliberately do NOT badge the nav and do NOT enter the notification
+  digest. `supShortfalls()` only ever returns months that have already CLOSED, so a red count or a
+  daily email asks for something nobody can act on. "Supervision short" was removed from the
+  `REASONS` allowlist in notify.mjs and from client-alerts.js too, so a stale browser cannot
+  resurrect it and any alert already in the blob store is filtered out. The shortfall is still
+  shown on the supervision rows, in the dashboard group, and as a neutral (not red) stat tile —
+  it is a record, not a demand. If you ever want it alerted again, all four places must change.

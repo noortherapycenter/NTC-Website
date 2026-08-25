@@ -935,7 +935,9 @@
       statTile('Next 14 days', soon.length, soon.length ? 'soon' : 'ok') +
       statTile('Open checklist items', openItems, openItems ? 'soon' : 'ok') +
       statTile('Files incomplete', files.length, files.length ? 'over' : 'ok') +
-      statTile('Supervision short', supShort.length, supShort.length ? 'over' : 'ok') +
+      // Neutral, not red: these are closed months, so the figure is a record
+      // rather than something to act on.
+      statTile('Supervision short', supShort.length, supShort.length ? 'none' : 'ok') +
       '</div>';
 
     h += group('Overdue', over) + group('Next 14 days', soon);
@@ -2636,10 +2638,11 @@
     dueItems(0).forEach(function (i) {
       if (i.days < 0) counts[i.mod] = (counts[i.mod] || 0) + 1;
     });
-    // Supervision has no due date — a closed month that came up short is the
-    // equivalent, so it badges the same way.
-    var s = supShortfalls().length;
-    if (s) counts.clientsup = s;
+    // Supervision deliberately does NOT badge. supShortfalls() only ever
+    // returns months that have already closed, and no amount of red on the
+    // nav makes last month's supervision happen. The shortfall is still shown
+    // on the supervision rows themselves, where it is a record rather than a
+    // demand.
     return counts;
   }
 
@@ -3031,10 +3034,9 @@
       push(r.id, initialsOf(r.client), 'Authorization ends', due);
     });
 
-    // Supervision months that closed under the requirement.
-    supShortfalls().forEach(function (r) {
-      push(r.id, initialsOf(r.client), 'Supervision short', monthEnd(r.month));
-    });
+    // Supervision shortfalls are deliberately NOT alerted. They only exist for
+    // months that have already closed, so a daily reminder asks for something
+    // nobody can do. The shortfall stays visible on the supervision rows.
 
     // Client files still missing paperwork.
     Store.all('clients').forEach(function (c) {

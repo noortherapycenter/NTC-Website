@@ -146,7 +146,9 @@ async function collect(store, today) {
  * same shape rules are applied again, since this data ends up in an email.
  */
 const INITIALS = /^[A-Z][A-Z.\-]{0,4}$/;
-const REASONS = new Set(["Authorization ends", "Supervision short", "File incomplete"]);
+// "Supervision short" was removed deliberately: it only ever applied to months
+that had already closed, so notifying about it asked for the impossible.
+const REASONS = new Set(["Authorization ends", "File incomplete"]);
 
 async function collectClients(state, today) {
   let doc = null;

@@ -35,7 +35,6 @@ const INITIALS = /^[A-Za-z][A-Za-z.\-]{0,4}$/;
 // A fixed vocabulary, so no free text can ride along in this field.
 const REASONS = new Set([
   "Authorization ends",
-  "Supervision short",
   "File incomplete",
 ]);
 
