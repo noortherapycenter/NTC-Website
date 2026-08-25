@@ -275,7 +275,7 @@
    */
   var SUP_RATIO = 16;
   var SUP_CODES = ['H0032', '97155', '97156', 'Other'];
-  var SUP_LOCATIONS = ['Home', 'Center', 'School', 'Other'];
+  var SUP_LOCATIONS = ['Home', 'Clinic', 'Center', 'School', 'Telehealth', 'Other'];
 
   var SUPS = {
     clientsup: {
@@ -1347,6 +1347,7 @@
     var head = '<div class="tk-head"><div><h2>' + esc(def.label) + '</h2>' +
       '<p class="tk-sub">' + esc(def.blurb) + '</p></div>' +
       '<div class="tk-head-actions">' + syncChip('clientsup') +
+      '<button type="button" class="tk-btn" data-suppaste="">Paste sessions</button>' +
       '<button type="button" class="tk-btn tk-primary" data-supadd="">+ Month</button>' +
       '</div></div>';
 
@@ -1368,7 +1369,6 @@
         '<button type="button" class="tk-btn" data-supedit="' + esc(r.id) + '">Edit details</button>' +
         '<button type="button" class="tk-btn tk-x" data-supdel="' + esc(r.id) + '">Delete</button>' +
         '<button type="button" class="tk-btn" data-supprint="1">Print</button>' +
-        '<button type="button" class="tk-btn" data-sespaste="' + esc(r.id) + '">Paste sessions</button>' +
         '<button type="button" class="tk-btn tk-primary" data-sesadd="' + esc(r.id) + '">+ Session</button>' +
         '</div></div>';
 
@@ -1454,6 +1454,7 @@
         ' &middot; ' + esc(hm(roll.provided)) + ' provided of ' + esc(hm(roll.required)) + ' required' +
         (roll.closedShort ? ' &middot; ' + roll.closedShort + ' closed short' : '') +
         '</p></div><div class="tk-head-actions">' +
+        '<button type="button" class="tk-btn" data-suppaste="' + esc(who) + '">Paste sessions</button>' +
         '<button type="button" class="tk-btn tk-primary" data-supadd="' + esc(who) + '">+ Month</button>' +
         '</div></div>';
 
@@ -1650,144 +1651,227 @@
     return (a && b) ? { start: a, end: b } : null;
   }
 
-  function parseSupPaste(text, month) {
-    var lines = String(text || '').split(/\r?\n/).filter(function (l) { return l.trim(); });
+  /* Reads a pasted supervision export. Two shapes are handled:
+   *   - stacked: one field per line, which is what copying an HTML table
+   *     gives you. Records are found by anchoring on the two adjacent date
+   *     lines (start date / end date), so a row missing its optional city and
+   *     address does not throw the rest of the paste out of alignment.
+   *   - delimited: tab or comma separated, one record per line.
+   * Rows are NOT restricted to a single month — each is filed by its own date.
+   */
+  function pDur(t) {
+    return /^\s*\d+\s*h(\s*\d+\s*m)?\s*$|^\s*\d+\s*m(in)?s?\s*$/i.test(String(t || ''));
+  }
+  function pCode(t) {
+    return /^\s*(h\d{4}|\d{5})\s*$/i.test(String(t || ''));
+  }
+
+  // client, team member, start date, end date, start time, end time, then a
+  // variable tail: [duration] location [city] [address] [note] [billing code]
+  function supRowFromFields(f) {
+    var out = { client: f[0] || '', supervisor: f[1] || '', date: pDate(f[2], '', false),
+                start: pClock(f[4]), end: pClock(f[5]),
+                code: '', codeOther: '', location: '', city: '', address: '', note: '', why: '' };
+    var tail = f.slice(6).filter(function (x) { return String(x || '').trim(); });
+    if (tail.length && pDur(tail[0])) tail.shift();
+    if (tail.length && pCode(tail[tail.length - 1])) out.code = tail.pop().trim().toUpperCase();
+    if (tail.length) out.note = tail.pop().trim();
+    if (tail.length) out.location = tail.shift().trim();
+    if (tail.length) out.city = tail.shift().trim();
+    if (tail.length) out.address = tail.join(', ').trim();
+
+    // Billing code drives the session type; anything unrecognised is "Other"
+    // with the original text kept so nothing is lost.
+    if (out.code && SUP_CODES.indexOf(out.code) < 0) { out.codeOther = out.note || out.code; out.code = 'Other'; }
+    else if (!out.code && out.note) { out.codeOther = out.note; out.code = 'Other'; }
+
+    if (!out.date) out.why = 'no date found';
+    else if (!out.start || !out.end) out.why = 'need a start and an end time';
+    else if (!minsBetween(out.start, out.end)) out.why = 'end is not after start';
+    out.ok = !out.why;
+    out.mins = out.ok ? minsBetween(out.start, out.end) : 0;
+    out.month = out.ok ? out.date.slice(0, 7) : '';
+    return out;
+  }
+
+  function parseSupPaste(text) {
+    var raw = String(text || '').split(/\r?\n/);
+    var lines = raw.map(function (l) { return l.trim(); }).filter(function (l) { return l; });
     if (!lines.length) return [];
 
-    var delim = null;
-    if (lines[0].indexOf('\t') >= 0) delim = '\t';
-    else if (lines[0].split(',').length >= 2) delim = ',';
-    function cells(l) {
-      return (delim ? l.split(delim) : l.trim().split(/\s{2,}/)).map(function (t) { return t.trim(); });
-    }
+    var delimited = lines[0].indexOf('\t') >= 0 || lines[0].split(',').length >= 6;
 
-    var first = cells(lines[0]).map(function (c) { return c.toLowerCase(); });
-    var map = null;
-    if (first.some(function (c) { return /^(date|day)\b/.test(c); })) {
-      map = {};
-      first.forEach(function (c, i) {
-        if (map.date == null && /date|day/.test(c)) map.date = i;
-        else if (map.start == null && /start|from|in\b/.test(c)) map.start = i;
-        else if (map.end == null && /end|to\b|out\b/.test(c)) map.end = i;
-        else if (map.range == null && /time|hours|span/.test(c)) map.range = i;
-        else if (map.supervisor == null && /supervisor|staff|qsp|bcba|provider|by/.test(c)) map.supervisor = i;
-        else if (map.code == null && /code|type|service|activity/.test(c)) map.code = i;
+    if (!delimited) {
+      // Stacked. Anchor on two consecutive parseable dates; the record starts
+      // two lines earlier (client, team member).
+      var isD = function (l) { return !!pDate(l, '', false); };
+      var starts = [];
+      for (var i = 2; i + 1 < lines.length; i++) {
+        if (isD(lines[i]) && isD(lines[i + 1])) starts.push(i - 2);
+      }
+      if (!starts.length) return [];
+      return starts.map(function (st, n) {
+        var end = n + 1 < starts.length ? starts[n + 1] : lines.length;
+        return supRowFromFields(lines.slice(st, end));
       });
     }
 
-    return (map ? lines.slice(1) : lines).map(function (l) {
-      var c = cells(l);
-      var out = { raw: l.trim(), date: '', supervisor: '', code: '', start: '', end: '', why: '' };
-
-      if (map) {
-        out.date = pDate(c[map.date], month, true);
-        if (map.supervisor != null) out.supervisor = c[map.supervisor] || '';
-        if (map.code != null) out.code = c[map.code] || '';
-        if (map.start != null) out.start = pClock(c[map.start]);
-        if (map.end != null) out.end = pClock(c[map.end]);
-        if ((!out.start || !out.end) && map.range != null) {
-          var rg = pRange(c[map.range]);
-          if (rg) { out.start = rg.start; out.end = rg.end; }
-        }
-      } else {
-        var rest = [];
-        c.forEach(function (tok) {
-          if (!out.date) { var d = pDate(tok, month, false); if (d) { out.date = d; return; } }
-          if (!out.start) { var rg = pRange(tok); if (rg) { out.start = rg.start; out.end = rg.end; return; } }
-          rest.push(tok);
-        });
-        // A loose row may still carry two separate clock tokens.
-        if (!out.start) {
-          var clocks = [];
-          rest = rest.filter(function (tok) {
-            var t = pClock(tok);
-            if (t && clocks.length < 2) { clocks.push(t); return false; }
-            return true;
-          });
-          if (clocks.length === 2) { out.start = clocks[0]; out.end = clocks[1]; }
-        }
-        out.supervisor = rest.shift() || '';
-        out.code = rest.shift() || '';
-      }
-
-      if (!out.date) out.why = 'no date found';
-      else if (!out.start || !out.end) out.why = 'need a start and an end time';
-      else if (!minsBetween(out.start, out.end)) out.why = 'end is not after start';
-      else if (month && (out.date < monthStart(month) || out.date > monthEnd(month))) {
-        out.why = 'outside ' + monthLabel(month);
-      }
-      out.ok = !out.why;
-      out.mins = out.ok ? minsBetween(out.start, out.end) : 0;
-      return out;
-    });
+    var delim = lines[0].indexOf('\t') >= 0 ? '\t' : ',';
+    var rows = lines.map(function (l) { return l.split(delim).map(function (c) { return c.trim(); }); });
+    // Drop a header row if the third column is a label rather than a date.
+    if (rows.length > 1 && !pDate(rows[0][2], '', false) && /date/i.test(rows[0].join(' '))) rows.shift();
+    return rows.map(supRowFromFields);
   }
 
-  function openSupPaste(recId) {
-    var rec = Store.get('clientsup', recId);
-    if (!rec) return;
+
+  function openSupPaste(presetClient) {
     var parsed = [];
 
     var body = '<div class="tk-paste">' +
-      '<p class="tk-modal-note">Paste sessions for <strong>' + esc(rec.client || 'this client') +
-      '</strong>, ' + esc(monthLabel(rec.month)) + '. One per line, from a spreadsheet, a CSV, or typed out. ' +
-      'A header row is used to work out the columns if there is one.</p>' +
-      '<textarea id="tk-sup-in" spellcheck="false" placeholder="Date\tSupervisor\tStart\tEnd' +
-      '&#10;' + esc(monthStart(rec.month).slice(5).replace('-', '/')) + '\tAmina\t9:00am\t10:00am' +
-      '&#10;' + esc(monthStart(rec.month).slice(5).replace('-', '/')) + '\tAmina\t2:00pm\t3:30pm"></textarea>' +
-      '<p class="tk-hint">Understood: <strong>dates</strong> as 8/4, 8/4/2026, 2026-08-04 or Aug 4 &middot; ' +
-      '<strong>times</strong> as 9:00, 9am, 2:30 PM, or a range like 9:00–10:30 &middot; plus supervisor and type. ' +
-      'Sessions must fall inside ' + esc(monthLabel(rec.month)) + '.</p>' +
+      '<p class="tk-modal-note">Paste a whole supervision export \u2014 any number of clients, any ' +
+      'number of months. Each session is filed under its own month, and a supervision month is ' +
+      'created for anything that does not have one yet.</p>' +
+      '<textarea id="tk-sup-in" spellcheck="false" placeholder="Paste here. Copying the table out ' +
+      'gives one field per line, which is what this expects. Tab or comma separated rows work too."></textarea>' +
+      '<p class="tk-hint">Read from each row: client, team member (the supervisor), date, start and ' +
+      'end time, and the billing code. Rows missing an optional city or address still line up ' +
+      'correctly. Sessions already logged for that month are skipped.</p>' +
       '<div id="tk-sup-preview"></div></div>';
 
-    showModal('Paste sessions', body, function () {
-      var good = parsed.filter(function (r) { return r.ok; });
-      if (!good.length) return 'Nothing to import yet — paste some rows above.';
-      var live = Store.get('clientsup', recId);
-      if (!live) return 'That supervision month no longer exists.';
-      var next = Object.assign({}, live);
-      next.sessions = (live.sessions || []).slice();
+    showModal('Paste supervision sessions', body, function () {
+      var good = parsed.filter(function (r) { return r.ok && (r.client || presetClient); });
+      if (!good.length) return 'Nothing to import yet \u2014 paste some rows above.';
+
+      var groups = {}, order = [];
       good.forEach(function (r) {
-        next.sessions.push({ id: uid(), supervisor: r.supervisor, date: r.date,
-                             code: r.code, codeOther: '', start: r.start, end: r.end });
+        var key = (r.client || presetClient) + '\u0000' + r.month;
+        if (!groups[key]) { groups[key] = []; order.push(key); }
+        groups[key].push(r);
       });
-      Store.save('clientsup', next);
-      flash('Imported ' + good.length + ' session' + (good.length === 1 ? '' : 's') + '.');
+
+      var added = 0, skipped = 0, created = 0;
+      order.forEach(function (key) {
+        var bits = key.split('\u0000'), client = bits[0], month = bits[1];
+        var rows = groups[key];
+
+        var rec = null;
+        Store.all('clientsup').forEach(function (x) {
+          if (x.client === client && x.month === month) rec = x;
+        });
+        var isNew = !rec;
+        var next = rec ? Object.assign({}, rec)
+                       : { id: uid(), client: client, month: month, sessions: [], directMin: 0 };
+        next.sessions = (next.sessions || []).slice();
+
+        // Re-pasting an overlapping range must not double-count the month.
+        var seen = {};
+        next.sessions.forEach(function (x) { seen[x.date + '|' + x.start + '|' + x.end] = 1; });
+
+        rows.forEach(function (r) {
+          var k = r.date + '|' + r.start + '|' + r.end;
+          if (seen[k]) { skipped++; return; }
+          seen[k] = 1;
+          next.sessions.push({ id: uid(), supervisor: r.supervisor, date: r.date,
+                               code: r.code, codeOther: r.codeOther, start: r.start, end: r.end });
+          added++;
+        });
+
+        // Only fill details in when creating the month, so nothing recorded by
+        // hand is overwritten by an import.
+        if (isNew) {
+          created++;
+          var tally = {}, best = '', bestN = 0;
+          rows.forEach(function (r) {
+            if (!r.location) return;
+            tally[r.location] = (tally[r.location] || 0) + 1;
+            if (tally[r.location] > bestN) { bestN = tally[r.location]; best = r.location; }
+          });
+          if (best) {
+            if (SUP_LOCATIONS.indexOf(best) >= 0) next.location = best;
+            else { next.location = 'Other'; next.locationOther = best; }
+          }
+          if (rows[0].supervisor) next.qsp = rows[0].supervisor;
+        }
+
+        Store.save('clientsup', next);
+      });
+
+      flash('Imported ' + added + ' session' + (added === 1 ? '' : 's') +
+        (created ? ' \u00b7 ' + created + ' new month' + (created === 1 ? '' : 's') : '') +
+        (skipped ? ' \u00b7 ' + skipped + ' already logged' : '') + '.');
       return true;
     }, 'Import');
 
     var ta = document.getElementById('tk-sup-in');
     var pv = document.getElementById('tk-sup-preview');
     var okBtn = modal.querySelector('.tk-ok');
+    var roster = {};
+    Store.all('clients').forEach(function (c) { roster[c.name] = 1; });
 
     function refresh() {
-      parsed = parseSupPaste(ta.value, rec.month);
+      parsed = parseSupPaste(ta.value);
       var good = parsed.filter(function (r) { return r.ok; });
       okBtn.textContent = good.length ? 'Import ' + good.length : 'Import';
       if (!parsed.length) { pv.innerHTML = ''; return; }
 
-      var total = good.reduce(function (n, r) { return n + r.mins; }, 0);
+      // Group for display exactly as the import groups for storage.
+      var order = [], byKey = {};
+      good.forEach(function (r) {
+        var key = (r.client || presetClient || '(no client)') + '\u0000' + r.month;
+        if (!byKey[key]) { byKey[key] = []; order.push(key); }
+        byKey[key].push(r);
+      });
+      order.sort();
+
+      var unknown = {};
+      good.forEach(function (r) {
+        var nm = r.client || presetClient;
+        if (nm && !roster[nm]) unknown[nm] = 1;
+      });
+
       var h = '<div class="tk-preview"><table><thead><tr>' +
         '<th>Date</th><th>Supervisor</th><th>Type</th><th>Time</th><th>Length</th></tr></thead><tbody>';
-      parsed.slice(0, 60).forEach(function (r) {
-        if (!r.ok) {
-          h += '<tr class="bad"><td colspan="5">' + esc(r.why) + ' &mdash; ' + esc(r.raw.slice(0, 70)) + '</td></tr>';
-          return;
-        }
-        h += '<tr><td class="k">' + esc(fmtDate(r.date)) + '</td><td>' + esc(r.supervisor || '—') + '</td>' +
-          '<td>' + esc(r.code || '—') + '</td>' +
-          '<td>' + esc(fmtTime(r.start)) + '–' + esc(fmtTime(r.end)) + '</td>' +
-          '<td>' + esc(hm(r.mins)) + '</td></tr>';
+      order.forEach(function (key) {
+        var bits = key.split('\u0000');
+        var rows = byKey[key];
+        var mins = rows.reduce(function (n, r) { return n + r.mins; }, 0);
+        h += '<tr class="grp"><td colspan="5"><strong>' + esc(bits[0]) + '</strong> \u00b7 ' +
+          esc(monthLabel(bits[1])) + ' \u00b7 ' + rows.length + ' session' +
+          (rows.length === 1 ? '' : 's') + ' \u00b7 ' + esc(hm(mins)) + '</td></tr>';
+        rows.sort(function (x, y) {
+          return x.date.localeCompare(y.date) || x.start.localeCompare(y.start);
+        });
+        rows.forEach(function (r) {
+          h += '<tr><td class="k">' + esc(fmtDate(r.date)) + '</td>' +
+            '<td>' + esc(r.supervisor || '\u2014') + '</td>' +
+            '<td>' + esc(r.code === 'Other' ? (r.codeOther || 'Other') : (r.code || '\u2014')) + '</td>' +
+            '<td>' + esc(fmtTime(r.start)) + '\u2013' + esc(fmtTime(r.end)) + '</td>' +
+            '<td>' + esc(hm(r.mins)) + '</td></tr>';
+        });
       });
-      h += '</tbody></table></div><p class="tk-hint">' + good.length + ' of ' + parsed.length +
-        ' row' + (parsed.length === 1 ? '' : 's') + ' ready' +
-        (parsed.length > 60 ? ' (showing the first 60)' : '') +
-        (good.length ? ' &middot; ' + esc(hm(total)) + ' of supervision' : '') + '.</p>';
+      parsed.filter(function (r) { return !r.ok; }).slice(0, 10).forEach(function (r) {
+        h += '<tr class="bad"><td colspan="5">' + esc(r.why) + ' \u2014 ' +
+          esc(((r.client || '') + ' ' + (r.date || '')).trim().slice(0, 70)) + '</td></tr>';
+      });
+      h += '</tbody></table></div>';
+
+      var months = {};
+      good.forEach(function (r) { months[r.month] = 1; });
+      var nMonths = Object.keys(months).length;
+      var nUnknown = Object.keys(unknown).length;
+      h += '<p class="tk-hint">' + good.length + ' of ' + parsed.length + ' row' +
+        (parsed.length === 1 ? '' : 's') + ' ready, across ' + nMonths + ' month' +
+        (nMonths === 1 ? '' : 's') + '.' +
+        (nUnknown ? ' <strong>' + esc(Object.keys(unknown).join(', ')) + '</strong> ' +
+          (nUnknown === 1 ? 'is' : 'are') + ' not on the client roster yet \u2014 the months are still created.' : '') +
+        ' Direct therapy hours are not part of this export, so set them per month to get a required total.</p>';
       pv.innerHTML = h;
     }
 
     ta.addEventListener('input', refresh);
     ta.addEventListener('paste', function () { setTimeout(refresh, 0); });
   }
+
 
   function openSessionEditor(recId, sesId) {
     var rec = Store.get('clientsup', recId);
@@ -2499,7 +2583,7 @@
       if ((el = e.target.closest('[data-supedit]'))) { openSupEditor(el.dataset.supedit); return; }
       if ((el = e.target.closest('[data-supprint]'))) { window.print(); return; }
       if ((el = e.target.closest('[data-sesadd]'))) { openSessionEditor(el.dataset.sesadd, ''); return; }
-      if ((el = e.target.closest('[data-sespaste]'))) { openSupPaste(el.dataset.sespaste); return; }
+      if ((el = e.target.closest('[data-suppaste]'))) { openSupPaste(el.dataset.suppaste || ''); return; }
       if ((el = e.target.closest('[data-sesedit]'))) {
         var se = el.dataset.sesedit.split('|');
         openSessionEditor(se[0], se[1]);

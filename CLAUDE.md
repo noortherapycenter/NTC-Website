@@ -64,12 +64,22 @@
   `supKey`/`supName`/`supHash` convert. A two-segment `#clientsup:<recordId>` link from before this
   change still resolves — the client level detects it and redirects. Grouping is by name, so
   renaming a client in the roster does NOT move their existing supervision months.
-- "Paste sessions" inside a month (`parseSupPaste`) accepts a spreadsheet/CSV/text paste. It detects
-  the delimiter, uses the first row as a header when it starts with a date column, and otherwise
-  reads each field by shape. Dates: 8/4, 8/4/2026, 2026-08-04, Aug 4. Times: 9:00, 9am, 2:30 PM, or
-  a range like 9:00-10:30. It enforces the same rules the single-session editor does — end after
-  start, date inside the month — and shows rejected rows with the reason rather than dropping them.
-  Nothing is written until the preview is confirmed.
+- "Paste sessions" lives on the Client Supervision tab and on a client's month list — NOT inside a
+  month — because a real export spans many months and is filed by each row's own date.
+  `parseSupPaste` handles two shapes:
+  - stacked (one field per line), which is what copying the HTML table gives. Records are found by
+    anchoring on the two adjacent date lines (start date / end date) and taking the two lines before
+    them as client and team member. This is why a row missing its optional city and address does not
+    push everything after it out of alignment — do NOT replace this with fixed-size chunking.
+  - tab or comma separated, one record per line.
+  The tail is read right-to-left: billing code, then note name, then location / city / address, with
+  an optional duration cell dropped (length is always recomputed from start and end).
+  Verified against a real 37-row export spanning Feb–Aug 2026: the times parsed from the clock sum
+  to 40h57m, exactly matching the export’s own Duration column.
+  Import groups by client + month, creates any missing supervision month, and skips a session whose
+  date+start+end is already logged, so re-pasting an overlapping range cannot double-count. Details
+  (location, QSP) are only filled in when a month is created, never overwriting hand-entered data.
+  Direct therapy hours are not in the export, so `directMin` starts at 0 and must be set per month.
 - Client Supervision tracker tab (`clientsup` in `tracker.js`, registered in `SUPS`). One record per
   client per month, replacing the Passage Health clinical supervision report: direct therapy hours
   drive the hours required, the session log (supervisor, date, H0032/97155, start, end) drives the

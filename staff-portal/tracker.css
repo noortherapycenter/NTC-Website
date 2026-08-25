@@ -506,3 +506,9 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
 .tk-preview td { padding: 8px 11px; border-bottom: 1px solid var(--line); color: var(--muted); }
 .tk-preview tr.bad td { background: var(--over-bg); color: var(--over); }
 .tk-preview td.k { color: var(--ink); font-weight: 700; }
+
+/* Month/client heading rows inside the paste preview */
+.tk-preview tr.grp td {
+  background: var(--surface-2); color: var(--ink);
+  font-size: 11.5px; padding: 8px 11px; border-bottom: 1.5px solid var(--line);
+}
