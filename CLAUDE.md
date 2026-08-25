@@ -64,22 +64,27 @@
   `supKey`/`supName`/`supHash` convert. A two-segment `#clientsup:<recordId>` link from before this
   change still resolves — the client level detects it and redirects. Grouping is by name, so
   renaming a client in the roster does NOT move their existing supervision months.
-- "Paste sessions" lives on the Client Supervision tab and on a client's month list — NOT inside a
-  month — because a real export spans many months and is filed by each row's own date.
-  `parseSupPaste` handles two shapes:
-  - stacked (one field per line), which is what copying the HTML table gives. Records are found by
-    anchoring on the two adjacent date lines (start date / end date) and taking the two lines before
-    them as client and team member. This is why a row missing its optional city and address does not
-    push everything after it out of alignment — do NOT replace this with fixed-size chunking.
-  - tab or comma separated, one record per line.
-  The tail is read right-to-left: billing code, then note name, then location / city / address, with
-  an optional duration cell dropped (length is always recomputed from start and end).
-  Verified against a real 37-row export spanning Feb–Aug 2026: the times parsed from the clock sum
-  to 40h57m, exactly matching the export’s own Duration column.
-  Import groups by client + month, creates any missing supervision month, and skips a session whose
-  date+start+end is already logged, so re-pasting an overlapping range cannot double-count. Details
-  (location, QSP) are only filled in when a month is created, never overwriting hand-entered data.
-  Direct therapy hours are not in the export, so `directMin` starts at 0 and must be set per month.
+- "Import sessions" lives on the Client Supervision tab and on a client's month list — NOT inside a
+  month, because a real export spans many months and every row is filed by its own date. It takes a
+  paste or a dropped/chosen .csv file.
+- `parseSupPaste` tries three shapes in order:
+  1. delimited WITH a header it recognises (`HEAD_MAP` matches column names, so order does not
+     matter). `csvSplit` is a real RFC4180 reader — the exports quote the address, which contains
+     commas, so a plain split(",") shifts every later column. Do not "simplify" it.
+  2. stacked, one field per line (copying the HTML table). Records are found by anchoring on the two
+     adjacent date lines, so a row missing its optional city/address does not push the rest out of
+     alignment. Do NOT replace with fixed-size chunking.
+  3. delimited without a usable header, read positionally.
+- Rows are classified by billing code: `SUP_CODES` become supervision sessions, `DIRECT_CODES`
+  (97153/97154/H2019) are summed into the month's direct therapy, and anything else is shown as
+  skipped rather than dropped. A note name like "Direct (97153)" also carries a code; the explicit
+  column wins but a disagreement sets `mismatch` and is surfaced in the preview.
+- Direct therapy is stored as `directLog` (date/start/end/mins/staff) and `directMin` is the sum, so
+  re-importing is idempotent. A month with no imported direct rows keeps its hand-entered
+  `directMin`. Length always comes from the clock, falling back to a declared duration column.
+- Verified against two real exports: a 37-row stacked supervision paste (40h57m, matching its own
+  Duration column) and a 273-row 97153 CSV spanning Sep 2025–Aug 2026 (1433h11m, matching its
+  Duration column to under a minute; Jun 2026 = 193h58m direct -> 12h07m required).
 - Client Supervision tracker tab (`clientsup` in `tracker.js`, registered in `SUPS`). One record per
   client per month, replacing the Passage Health clinical supervision report: direct therapy hours
   drive the hours required, the session log (supervisor, date, H0032/97155, start, end) drives the
