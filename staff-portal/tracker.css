@@ -517,3 +517,10 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
 .tk-droprow { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .tk-droprow .tk-hint { margin: 0; }
 .tk-paste textarea.drop { border-color: var(--green); background: var(--ok-bg); }
+
+/* ---- Duplicate-name nudges ----
+   Shown in the import preview and above the supervision roster. Deliberately
+   inline with the thing they describe, not a modal: the decision needs the
+   surrounding names visible to be answerable. */
+.tk-nudge { display: inline-block; margin-right: 14px; }
+.tk-note-warn .tk-mini { margin-left: 4px; vertical-align: baseline; }

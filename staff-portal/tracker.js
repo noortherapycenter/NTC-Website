@@ -19,6 +19,7 @@
   var LS_PHI_FIX = 'noor-tracker-phi-fix';
   var LS_RETIRED = 'noor-tracker-retired';
   var LS_BEACON = 'noor-tracker-beacon';
+  var LS_NOTDUPE = 'noor-tracker-notdupes';
   var API = '/api/tracker';
 
   /* Modules that used to exist. Leaving their records behind would mean staff
@@ -384,6 +385,176 @@
       out.push(seen[c.name]);
     });
     return out.sort(function (a, b) { return a.name.localeCompare(b.name); });
+  }
+
+  /* ------------------------------------------------ near-duplicate names
+   *
+   * Supervision months key the client by NAME, so "Suhaib Musa" and "Suhaib
+   * Muse" are two people as far as the data is concerned. That is how one
+   * human ends up listed twice: the roster says one spelling, an export says
+   * another, and the importer matches on exact text.
+   *
+   * These are only ever SUGGESTIONS. "Ahmed Ali" and "Ahmad Ali" are one
+   * character apart and may well be two different children — so nothing is
+   * merged without someone saying so. The cost of a wrong auto-merge is two
+   * clients' records silently fused; the cost of a missed suggestion is a
+   * duplicate row somebody notices.
+   */
+  function normName(s) {
+    return String(s || '')
+      .toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')   // strip accents
+      .replace(/[^a-z0-9\s]/g, ' ')                      // punctuation to space
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  // Bounded Levenshtein: stops as soon as it is certain the distance is > max,
+  // because anything beyond that is not a suggestion worth making.
+  function editDistance(a, b, max) {
+    if (a === b) return 0;
+    if (Math.abs(a.length - b.length) > max) return max + 1;
+    var prev = [], cur = [], i, j;
+    for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) {
+      cur[0] = i;
+      var best = cur[0];
+      for (j = 1; j <= b.length; j++) {
+        cur[j] = Math.min(
+          prev[j] + 1,
+          cur[j - 1] + 1,
+          prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1)
+        );
+        if (cur[j] < best) best = cur[j];
+      }
+      if (best > max) return max + 1;
+      for (j = 0; j <= b.length; j++) prev[j] = cur[j];
+    }
+    return prev[b.length];
+  }
+
+  // How alike two names are: 'same' once normalising makes them identical,
+  // 'close' for a small typo, or null.
+  function nameLikeness(a, b) {
+    var na = normName(a), nb = normName(b);
+    if (!na || !nb) return null;
+    if (na === nb) return 'same';
+
+    // Spacing and punctuation do not make a different person: "O'Brien" and
+    // "OBrien", "Mary-Jane" and "Mary Jane".
+    var sa = na.replace(/\s/g, ''), sb = nb.replace(/\s/g, '');
+    if (sa === sb) return 'same';
+
+    // The same words in a different order — "Musa Suhaib" vs "Suhaib Musa",
+    // which is how a surname-first export collides with a roster.
+    var wa = na.split(' ').slice().sort().join(' ');
+    var wb = nb.split(' ').slice().sort().join(' ');
+    if (wa === wb) return 'same';
+
+    // Below this, a single edit says too little: "Ali M" and "Ala M" are not
+    // a suggestion worth making. Measured without spaces so a middle name
+    // does not inflate the count.
+    var len = Math.min(sa.length, sb.length);
+    if (len < 6) return null;
+
+    var d = editDistance(na, nb, 2);
+    if (d <= 1) return 'close';
+    if (d === 2 && len >= 12) return 'close';
+
+    return null;
+  }
+
+  // Pairs of names in the supervision view that look like one person. The
+  // roster spelling is preferred as the survivor, because that record is what
+  // files, authorizations and everything else already point at.
+  // Pairs somebody has already said are two different people. Keyed on the
+  // normalised names so re-importing the same spellings does not resurrect a
+  // question that has been answered.
+  function dupePairKey(a, b) {
+    return [normName(a), normName(b)].sort().join('|');
+  }
+  function dismissedPairs() {
+    try { return JSON.parse(localStorage.getItem(LS_NOTDUPE) || '{}') || {}; }
+    catch (e) { return {}; }
+  }
+  function dismissPair(a, b) {
+    var d = dismissedPairs();
+    d[dupePairKey(a, b)] = 1;
+    try { localStorage.setItem(LS_NOTDUPE, JSON.stringify(d)); } catch (e) {}
+  }
+
+  function supDuplicates() {
+    var names = supClients().map(function (c) { return c.name; });
+    var onRoster = {};
+    Store.all('clients').forEach(function (c) {
+      if (c.name && c.active !== false) onRoster[c.name] = 1;
+    });
+    var dismissed = dismissedPairs();
+
+    var pairs = [];
+    for (var i = 0; i < names.length; i++) {
+      for (var j = i + 1; j < names.length; j++) {
+        var how = nameLikeness(names[i], names[j]);
+        if (!how) continue;
+        if (dismissed[dupePairKey(names[i], names[j])]) continue;
+        var a = names[i], b = names[j];
+        // Keep the roster spelling; failing that, keep the one with months.
+        var keep, drop;
+        if (onRoster[a] && !onRoster[b]) { keep = a; drop = b; }
+        else if (onRoster[b] && !onRoster[a]) { keep = b; drop = a; }
+        else { keep = a; drop = b; }
+        pairs.push({ keep: keep, drop: drop, how: how, bothOnRoster: !!(onRoster[a] && onRoster[b]) });
+      }
+    }
+    return pairs;
+  }
+
+  // Move every supervision month from one name onto another.
+  //
+  // One record per client per month is an invariant the rest of the module
+  // relies on, and a merge is exactly where it would break: both spellings can
+  // hold the same month. Where that happens the two are folded into one —
+  // sessions combined and de-duplicated, and the larger direct-therapy figure
+  // kept, since a zero means "never imported" rather than "no therapy".
+  function supMergeNames(fromName, toName) {
+    var moving = Store.all('clientsup').filter(function (r) { return r.client === fromName; });
+    var target = {};
+    Store.all('clientsup').forEach(function (r) {
+      if (r.client === toName) target[r.month] = r;
+    });
+
+    var moved = 0, folded = 0;
+    moving.forEach(function (r) {
+      var into = target[r.month];
+      if (!into) {
+        Store.save('clientsup', Object.assign({}, r, { client: toName }));
+        moved++;
+        return;
+      }
+      var sessions = (into.sessions || []).slice();
+      var have = {};
+      sessions.forEach(function (s) { have[s.date + '|' + s.start + '|' + s.end] = 1; });
+      (r.sessions || []).forEach(function (s) {
+        var k = s.date + '|' + s.start + '|' + s.end;
+        if (have[k]) return;
+        have[k] = 1;
+        sessions.push(Object.assign({}, s, { id: s.id || uid() }));
+      });
+      Store.save('clientsup', Object.assign({}, into, {
+        sessions: sessions,
+        directMin: Math.max(+into.directMin || 0, +r.directMin || 0),
+        notes: [into.notes, r.notes].filter(Boolean).join(' · ')
+      }));
+      Store.remove('clientsup', r.id);
+      folded++;
+    });
+
+    // If the name being dropped was its own roster entry, retire it — leaving
+    // it behind is what keeps the duplicate visible.
+    var strays = Store.all('clients').filter(function (c) { return c.name === fromName; });
+    strays.forEach(function (c) { Store.remove('clients', c.id); });
+
+    return { moved: moved, folded: folded, rosterRemoved: strays.length };
   }
 
   // Totals across one client's months, so the top row can say something useful
@@ -1490,6 +1661,24 @@
         'then give each one a supervision month.</div>';
     }
 
+    /* One person listed twice, almost always because the roster and an export
+     * spell them differently. Suggested, never applied automatically: two
+     * names one letter apart can be two real children. */
+    supDuplicates().forEach(function (d) {
+      h2 += '<p class="tk-note tk-note-warn"><strong>' + esc(d.keep) + '</strong> and ' +
+        '<strong>' + esc(d.drop) + '</strong> ' +
+        (d.how === 'same'
+          ? 'are the same name written two ways.'
+          : 'are one small spelling difference apart, so they are listed separately.') +
+        ' Supervision months are filed under the client&rsquo;s name, so a different spelling ' +
+        'in an import makes a second entry.' +
+        (d.bothOnRoster ? ' Both are on the client roster.' : '') +
+        ' <button type="button" class="tk-mini" data-supmerge="' +
+        esc(supKey(d.drop)) + '|' + esc(supKey(d.keep)) + '">Merge into ' + esc(d.keep) + '</button>' +
+        ' <button type="button" class="tk-mini" data-supdistinct="' + esc(supKey(d.drop)) +
+        '">They are different people</button></p>';
+    });
+
     h2 += '<div class="tk-filelist">';
     people.forEach(function (c) {
       var roll = supRollup(c.rows);
@@ -1859,6 +2048,15 @@
   function openSupPaste(presetClient) {
     var parsed = [];
 
+    // Spellings corrected in the preview before importing. Held here rather
+    // than rewritten into the pasted text, because the name can appear in
+    // several columns and a blind find-and-replace would hit the wrong ones.
+    var rename = {};
+    function clientOf(r) {
+      var nm = r.client || presetClient || '';
+      return rename[nm] || nm;
+    }
+
     var body = '<div class="tk-paste">' +
       '<p class="tk-modal-note">Paste or drop a session export \u2014 any number of clients, any ' +
       'number of months. Supervision (' + SUP_CODES.slice(0, 3).join(', ') + ') becomes sessions. ' +
@@ -1882,7 +2080,7 @@
 
       var groups = {}, order = [];
       usable.forEach(function (r) {
-        var key = (r.client || presetClient) + '\u0000' + r.month;
+        var key = clientOf(r) + '\u0000' + r.month;
         if (!groups[key]) { groups[key] = []; order.push(key); }
         groups[key].push(r);
       });
@@ -2004,7 +2202,7 @@
 
       var order = [], byKey = {};
       usable.forEach(function (r) {
-        var key = (r.client || presetClient || '(no client)') + '\u0000' + r.month;
+        var key = (clientOf(r) || '(no client)') + '\u0000' + r.month;
         if (!byKey[key]) { byKey[key] = []; order.push(key); }
         byKey[key].push(r);
       });
@@ -2060,7 +2258,7 @@
       var nM = Object.keys(months).length;
       var unknown = {};
       usable.forEach(function (r) {
-        var nm = r.client || presetClient;
+        var nm = clientOf(r);
         if (nm && !roster[nm]) unknown[nm] = 1;
       });
       var nU = Object.keys(unknown).length;
@@ -2075,8 +2273,40 @@
         (nU ? ' <strong>' + esc(Object.keys(unknown).join(', ')) + '</strong> ' +
               (nU === 1 ? 'is' : 'are') + ' not on the client roster yet \u2014 the months are still created.' : '') +
         '</p>';
+
+      /* A name that is not on the roster but is one letter from someone who
+       * is: that is where duplicate clients come from. Offer the roster
+       * spelling BEFORE importing, since fixing it here costs a click and
+       * fixing it afterwards means merging records. */
+      var rosterNames = Object.keys(roster);
+      var nudges = [];
+      Object.keys(unknown).forEach(function (nm) {
+        rosterNames.forEach(function (rn) {
+          if (nameLikeness(nm, rn)) nudges.push({ from: nm, to: rn });
+        });
+      });
+      if (nudges.length) {
+        h += '<p class="tk-note tk-note-warn"><strong>Check these spellings first.</strong> ';
+        nudges.forEach(function (n) {
+          h += '<span class="tk-nudge">&ldquo;' + esc(n.from) + '&rdquo; is not on the roster but ' +
+            '<strong>' + esc(n.to) + '</strong> is. ' +
+            '<button type="button" class="tk-mini" data-supfix="' +
+            esc(supKey(n.from)) + '|' + esc(supKey(n.to)) + '">Use ' + esc(n.to) + '</button></span> ';
+        });
+        h += 'Importing as-is creates a second client.</p>';
+      }
       pv.innerHTML = h;
     }
+
+    // The preview is rebuilt on every keystroke, so the spelling-fix buttons
+    // are delegated rather than bound to each rendering.
+    pv.addEventListener('click', function (e) {
+      var b = e.target.closest('[data-supfix]');
+      if (!b) return;
+      var bits = b.dataset.supfix.split('|');
+      rename[supName(bits[0])] = supName(bits[1]);
+      refresh();
+    });
 
     ta.addEventListener('input', refresh);
     ta.addEventListener('paste', function () { setTimeout(refresh, 0); });
@@ -2745,6 +2975,39 @@
       if ((el = e.target.closest('[data-train]'))) {
         var p = el.dataset.train.split('|');
         openTrainingEditor(p[0], p[1]);
+        return;
+      }
+      if ((el = e.target.closest('[data-supmerge]'))) {
+        var mp = el.dataset.supmerge.split('|');
+        var mFrom = supName(mp[0]), mTo = supName(mp[1]);
+        var mRows = Store.all('clientsup').filter(function (r) { return r.client === mFrom; }).length;
+        confirmModal('Merge ' + esc(mFrom) + ' into ' + esc(mTo) + '?',
+          (mRows
+            ? '<strong>' + mRows + ' supervision month' + (mRows === 1 ? '' : 's') + '</strong> move to ' +
+              esc(mTo) + '. Where both hold the same month, the sessions are combined and the ' +
+              'larger direct-therapy figure is kept.'
+            : 'There are no supervision months to move.') +
+          '<br><br>Do this only if they are the same person — it cannot be undone from here.',
+          'Merge', function () {
+            var res = supMergeNames(mFrom, mTo);
+            flash('Merged into ' + mTo + ' — ' + res.moved + ' month' + (res.moved === 1 ? '' : 's') + ' moved' +
+              (res.folded ? ', ' + res.folded + ' combined' : '') + '.');
+            location.hash = 'clientsup';
+            render();
+          });
+        return;
+      }
+      if ((el = e.target.closest('[data-supdistinct]'))) {
+        // Answering "different people" has to stick, or the same question comes
+        // back on every render and gets clicked through without being read.
+        var dn = supName(el.dataset.supdistinct);
+        var other = null;
+        supDuplicates().forEach(function (d) { if (d.drop === dn) other = d.keep; });
+        if (other) {
+          dismissPair(dn, other);
+          flash('Kept as two separate clients.');
+          render();
+        }
         return;
       }
       if ((el = e.target.closest('[data-beacon]'))) {

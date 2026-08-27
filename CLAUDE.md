@@ -148,3 +148,15 @@
   resurrect it and any alert already in the blob store is filtered out. The shortfall is still
   shown on the supervision rows, in the dashboard group, and as a neutral (not red) stat tile —
   it is a record, not a demand. If you ever want it alerted again, all four places must change.
+- Supervision months key the client by NAME STRING, not a roster id, so two spellings of one person
+  become two clients. `nameLikeness()` in `tracker.js` flags near-identical names (normalised for
+  case/punctuation/word-order, then a bounded Levenshtein) in two places: above the supervision
+  roster, and in the import preview BEFORE anything is created. `supMergeNames()` re-keys the months
+  and folds any month both spellings hold — sessions combined and de-duplicated by date+start+end,
+  the larger `directMin` kept, since 0 means "never imported" rather than "no therapy".
+  - These are SUGGESTIONS ONLY and must stay that way. "Ahmed Ali" and "Ahmad Ali" are one edit
+    apart and may be two real children; a wrong auto-merge fuses two caseloads silently. "They are
+    different people" is remembered in `LS_NOTDUPE`, keyed on the normalised pair, so re-importing
+    the same spellings does not re-ask a question that has been answered.
+  - The importer's `rename` map applies a corrected spelling at grouping time rather than rewriting
+    the pasted text — the name appears in several columns and a blind replace would hit the wrong ones.

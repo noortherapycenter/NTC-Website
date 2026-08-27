@@ -147,7 +147,7 @@ async function collect(store, today) {
  */
 const INITIALS = /^[A-Z][A-Z.\-]{0,4}$/;
 // "Supervision short" was removed deliberately: it only ever applied to months
-that had already closed, so notifying about it asked for the impossible.
+// that had already closed, so notifying about it asked for the impossible.
 const REASONS = new Set(["Authorization ends", "File incomplete"]);
 
 async function collectClients(state, today) {
