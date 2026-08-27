@@ -160,3 +160,20 @@
     the same spellings does not re-ask a question that has been answered.
   - The importer's `rename` map applies a corrected spelling at grouping time rather than rewriting
     the pasted text — the name appears in several columns and a blind replace would hit the wrong ones.
+- A session's length is `sesMins(s)`: the clock when there is one, otherwise a stored `mins`. Never
+  read `minsBetween(s.start, s.end)` directly for a supervision session. Exports commonly carry a
+  duration column and no times, and the importer accepts those rows deliberately — but it used to
+  store them with empty start/end and no length, so every one counted as ZERO provided and the month
+  read as entirely unsupervised. The direct branch had always persisted `mins`; the supervision
+  branch had not. Import dedupe keys include the length, code and supervisor for the same reason:
+  `date|start|end` collapsed to `"2026-06-03||"` for every clock-less row on a day and silently
+  discarded the rest as "already logged".
+- DHS supervision report (`openSupReport` / `supReportModel` / `supReportHTML` / `supReportPdf`).
+  Branded document per client covering every month: identity block, required-vs-provided summary,
+  the session log behind it, a certification line, and a confidentiality footer. `AGENCY` at the top
+  of that section holds the legal name, DBA, address and phone — correct it there, it is used by
+  both outputs.
+  - Two exits, both vector, neither a screenshot: "Print / Save as PDF" hides everything except the
+    report via `body.sr-open` print rules and lets the browser write the PDF, and "Download PDF"
+    redraws the same document with jsPDF (loaded lazily from CDN). html2canvas is deliberately NOT
+    used — a rasterised table is a poor thing to hand a regulator, and it would not be searchable.

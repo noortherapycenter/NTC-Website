@@ -341,11 +341,24 @@
     return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0');
   }
 
+  /* How long a session was.
+   *
+   * A clock is preferred when there is one, because it is the more specific
+   * record. But an export may give a duration column and no times at all, and
+   * those sessions used to count as zero — the month then read as entirely
+   * unsupervised however many hours had actually been delivered. */
+  function sesMins(s) {
+    if (!s) return 0;
+    var clock = minsBetween(s.start, s.end);
+    if (clock) return clock;
+    return Math.max(0, Math.round(+s.mins || 0));
+  }
+
   function supStats(r) {
     var direct = Math.max(0, Math.round(+(r && r.directMin) || 0));
     var required = Math.round(direct / SUP_RATIO);
     var provided = ((r && r.sessions) || []).reduce(function (n, s) {
-      return n + minsBetween(s.start, s.end);
+      return n + sesMins(s);
     }, 0);
     return {
       direct: direct, required: required, provided: provided,
@@ -1545,7 +1558,7 @@
         '</p></div><div class="tk-head-actions">' +
         '<button type="button" class="tk-btn" data-supedit="' + esc(r.id) + '">Edit details</button>' +
         '<button type="button" class="tk-btn tk-x" data-supdel="' + esc(r.id) + '">Delete</button>' +
-        '<button type="button" class="tk-btn" data-supprint="1">Print</button>' +
+        '<button type="button" class="tk-btn" data-supreport="' + esc(supKey(r.client)) + '">DHS report</button>' +
         '<button type="button" class="tk-btn tk-primary" data-sesadd="' + esc(r.id) + '">+ Session</button>' +
         '</div></div>';
 
@@ -1589,7 +1602,7 @@
             '<td>' + esc(s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—')) + '</td>' +
             '<td>' + esc(fmtTime(s.start)) + '</td>' +
             '<td>' + esc(fmtTime(s.end)) + '</td>' +
-            '<td>' + esc(hm(minsBetween(s.start, s.end))) + '</td>' +
+            '<td>' + esc(hm(sesMins(s))) + '</td>' +
             '<td class="tk-actions">' +
               '<button type="button" class="tk-mini" data-sesedit="' + esc(r.id + '|' + s.id) + '">Edit</button>' +
               '<button type="button" class="tk-mini tk-x" data-sesdel="' + esc(r.id + '|' + s.id) + '">Remove</button>' +
@@ -1631,6 +1644,7 @@
         ' &middot; ' + esc(hm(roll.provided)) + ' provided of ' + esc(hm(roll.required)) + ' required' +
         (roll.closedShort ? ' &middot; ' + roll.closedShort + ' closed short' : '') +
         '</p></div><div class="tk-head-actions">' +
+        '<button type="button" class="tk-btn" data-supreport="' + esc(supKey(who)) + '">DHS report</button>' +
         '<button type="button" class="tk-btn" data-suppaste="' + esc(who) + '">Import sessions</button>' +
         '<button type="button" class="tk-btn tk-primary" data-supadd="' + esc(who) + '">+ Month</button>' +
         '</div></div>';
@@ -1984,7 +1998,9 @@
   // Positional fallback: client, team member, start date, end date, start,
   // end, then a variable tail.
   function supRowFromFields(f) {
-    var row = { client: f[0] || '', supervisor: f[1] || '', note: '',
+    // Trimmed, exactly as rowFromMap does. Untrimmed, " Suhaib Muse" and
+    // "Suhaib Muse" are two different clients.
+    var row = { client: String(f[0] || '').trim(), supervisor: String(f[1] || '').trim(), note: '',
                 date: pDate(f[2], '', false), start: pClock(f[4]), end: pClock(f[5]),
                 declared: 0, location: '', city: '', address: '', code: '', codeOther: '', why: '' };
     var tail = f.slice(6).filter(function (x) { return String(x || '').trim(); });
@@ -2101,14 +2117,30 @@
         next.directLog = (next.directLog || []).slice();
 
         // Re-importing an overlapping range must not double-count either side.
+        /* Re-importing must not double-count, but the key has to tell two
+         * genuine sessions apart. Date+start+end alone collapses to
+         * "2026-06-03||" for every clock-less row on a day, so the second and
+         * third were thrown away as "already logged". Length, code and staff
+         * are what actually distinguish them. */
+        var sesKey = function (x) {
+          return [x.date, x.start || '', x.end || '', sesMins(x),
+                  x.code || '', x.supervisor || ''].join('|');
+        };
+        var dirKey = function (x) {
+          return [x.date, x.start || '', x.end || '',
+                  Math.max(0, Math.round(+x.mins || 0)), x.staff || ''].join('|');
+        };
         var seenSes = {};
-        next.sessions.forEach(function (x) { seenSes[x.date + '|' + x.start + '|' + x.end] = 1; });
+        next.sessions.forEach(function (x) { seenSes[sesKey(x)] = 1; });
         var seenDir = {};
-        next.directLog.forEach(function (x) { seenDir[x.date + '|' + x.start + '|' + x.end] = 1; });
+        next.directLog.forEach(function (x) { seenDir[dirKey(x)] = 1; });
 
         var touchedDirect = false;
         rows.forEach(function (r) {
-          var k = r.date + '|' + r.start + '|' + r.end;
+          var k = r.kind === 'direct'
+            ? dirKey({ date: r.date, start: r.start, end: r.end, mins: r.mins, staff: r.supervisor })
+            : sesKey({ date: r.date, start: r.start, end: r.end, mins: r.mins,
+                       code: r.code, supervisor: r.supervisor });
           if (r.kind === 'direct') {
             if (seenDir[k]) { skipped++; return; }
             seenDir[k] = 1;
@@ -2119,7 +2151,8 @@
             if (seenSes[k]) { skipped++; return; }
             seenSes[k] = 1;
             next.sessions.push({ id: uid(), supervisor: r.supervisor, date: r.date,
-                                 code: r.code, codeOther: r.codeOther, start: r.start, end: r.end });
+                                 code: r.code, codeOther: r.codeOther,
+                                 start: r.start, end: r.end, mins: r.mins });
             added++;
           }
         });
@@ -2337,19 +2370,27 @@
       sel('code', 'Supervision type', SUP_CODES, ses ? ses.code : '') +
       '<div class="tk-f"><label for="f_codeOther">If other</label>' +
         '<input type="text" id="f_codeOther" name="codeOther" value="' + esc(ses ? ses.codeOther : '') + '"/></div>' +
-      '<div class="tk-f"><label for="f_start">Start time <em>*</em></label>' +
-        '<input type="time" id="f_start" name="start" required value="' + esc(ses ? ses.start : '') + '"/></div>' +
-      '<div class="tk-f"><label for="f_end">End time <em>*</em></label>' +
-        '<input type="time" id="f_end" name="end" required value="' + esc(ses ? ses.end : '') + '"/></div>' +
-      '</div>';
+      '<div class="tk-f"><label for="f_start">Start time</label>' +
+        '<input type="time" id="f_start" name="start" value="' + esc(ses ? ses.start : '') + '"/></div>' +
+      '<div class="tk-f"><label for="f_end">End time</label>' +
+        '<input type="time" id="f_end" name="end" value="' + esc(ses ? ses.end : '') + '"/></div>' +
+      '<div class="tk-f"><label for="f_mins">…or length in minutes</label>' +
+        '<input type="number" id="f_mins" name="mins" min="0" step="1" value="' +
+        esc(ses && !minsBetween(ses.start, ses.end) && ses.mins ? ses.mins : '') + '"/></div>' +
+      '</div>' +
+      '<p class="tk-modal-note">Give the clock times where you have them. Some exports carry only ' +
+      'a length, so a session recorded that way is still counted.</p>';
 
     showModal((ses ? 'Edit ' : 'Add ') + 'supervision session', body, function (form) {
       var date = form.elements.date.value.trim();
       var start = form.elements.start.value.trim();
       var end = form.elements.end.value.trim();
+      var mins = Math.max(0, Math.round(+form.elements.mins.value || 0));
       if (!date) return 'Please enter the date of service.';
-      if (!start || !end) return 'Please enter both a start and an end time.';
-      if (!minsBetween(start, end)) return 'The end time needs to be after the start time.';
+      if (start && end && !minsBetween(start, end)) return 'The end time needs to be after the start time.';
+      if (!minsBetween(start, end) && !mins) {
+        return 'Enter a start and end time, or a length in minutes.';
+      }
 
       // A session dated outside the month it is filed under would quietly
       // inflate that month's total.
@@ -2365,7 +2406,8 @@
         date: date,
         code: form.elements.code.value.trim(),
         codeOther: form.elements.codeOther.value.trim(),
-        start: start, end: end
+        start: start, end: end,
+        mins: minsBetween(start, end) || mins
       };
       var at = -1;
       next.sessions.forEach(function (s, i) { if (s.id === row.id) at = i; });
@@ -2388,6 +2430,465 @@
         flash('Session removed.');
         render();
       });
+  }
+
+  /* ------------------------------------------------- DHS supervision report
+   *
+   * DHS asks for evidence that a client received the supervision their direct
+   * hours required. This produces that as a document: agency identity, the
+   * client, and every month with its required-vs-provided figures and the
+   * session log behind them.
+   *
+   * Two ways out, and they are not the same thing. "Print / Save as PDF" goes
+   * through the browser, which writes real vector text — searchable, and
+   * legible at any zoom. "Download PDF" builds the same document with jsPDF,
+   * for when a file is wanted without walking through a print dialog. Neither
+   * rasterises the page, because a screenshot of a table is a poor thing to
+   * hand a regulator.
+   */
+  var AGENCY = {
+    legal: 'Bright Minds Therapy, L.L.C.',
+    dba: 'Noor Therapy Center',
+    address: '6250 Excelsior Blvd, Suite 102, St. Louis Park, MN 55416',
+    phone: '612-482-3186'
+  };
+
+  var JSPDF_SRC = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+
+  function loadJsPdf() {
+    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
+    return new Promise(function (res, rej) {
+      var existing = document.querySelector('script[data-jspdf]');
+      if (existing) { existing.addEventListener('load', res); existing.addEventListener('error', rej); return; }
+      var s = document.createElement('script');
+      s.src = JSPDF_SRC;
+      s.setAttribute('data-jspdf', '1');
+      s.onload = res;
+      s.onerror = function () { rej(new Error('Could not load the PDF library — check the connection.')); };
+      document.head.appendChild(s);
+    });
+  }
+
+  // Everything the document needs, gathered once so the HTML and the PDF
+  // cannot drift apart.
+  function supReportModel(clientName) {
+    var rows = Store.all('clientsup')
+      .filter(function (r) { return r.client === clientName; })
+      .sort(function (a, b) { return String(a.month).localeCompare(String(b.month)); });
+
+    var person = null;
+    Store.all('clients').forEach(function (c) { if (c.name === clientName) person = c; });
+
+    var months = rows.map(function (r) {
+      var st = supStats(r);
+      var sessions = (r.sessions || []).slice().sort(function (a, b) {
+        return String(a.date).localeCompare(String(b.date)) ||
+               String(a.start).localeCompare(String(b.start));
+      });
+      return { rec: r, stats: st, sessions: sessions, open: supOpen(r) };
+    });
+
+    var total = months.reduce(function (t, m) {
+      t.direct += m.stats.direct;
+      t.required += m.stats.required;
+      t.provided += m.stats.provided;
+      t.sessions += m.sessions.length;
+      return t;
+    }, { direct: 0, required: 0, provided: 0, sessions: 0 });
+    total.short = Math.max(0, total.required - total.provided);
+
+    // The QSP named on the most recent month is the one to put on the cover.
+    var qsp = '', location = '';
+    months.forEach(function (m) {
+      if (m.rec.qsp) qsp = m.rec.qsp;
+      if (m.rec.location) {
+        location = m.rec.location === 'Other' && m.rec.locationOther
+          ? m.rec.locationOther : m.rec.location;
+      }
+    });
+
+    return {
+      client: clientName, person: person, months: months, total: total,
+      qsp: qsp, location: location,
+      from: months.length ? monthLabel(months[0].rec.month) : '',
+      to: months.length ? monthLabel(months[months.length - 1].rec.month) : '',
+      generated: new Date().toLocaleDateString('en-US', {
+        month: 'long', day: 'numeric', year: 'numeric'
+      })
+    };
+  }
+
+  function supReportHTML(m) {
+    var p = m.person || {};
+    function row(k, v) {
+      return '<tr><th>' + esc(k) + '</th><td>' + esc(v || '—') + '</td></tr>';
+    }
+
+    var h = '<div class="sr-doc">' +
+      '<header class="sr-head">' +
+        '<img class="sr-logo" src="noor-mark.png" alt=""/>' +
+        '<div class="sr-org"><strong>' + esc(AGENCY.dba) + '</strong>' +
+          '<span>' + esc(AGENCY.legal) + ' (DBA ' + esc(AGENCY.dba) + ')</span>' +
+          '<span>' + esc(AGENCY.address) + '</span>' +
+          '<span>' + esc(AGENCY.phone) + '</span></div>' +
+      '</header>' +
+      '<h1 class="sr-title">Clinical Supervision Report</h1>' +
+      '<p class="sr-period">' +
+        (m.from ? esc(m.from) + (m.to && m.to !== m.from ? ' – ' + esc(m.to) : '') : 'No months recorded') +
+      '</p>' +
+
+      '<table class="sr-meta"><tbody>' +
+        row('Client', m.client) +
+        row('Date of birth', p.dob ? fmtDate(p.dob) : '') +
+        row('Client / MA ID', p.clientId) +
+        row('Payer', p.payer) +
+        row('Primary BCBA / QSP', m.qsp) +
+        row('Primary service location', m.location) +
+      '</tbody></table>' +
+
+      '<table class="sr-summary"><thead><tr>' +
+        '<th>Month</th><th>Direct therapy</th><th>Supervision required</th>' +
+        '<th>Supervision provided</th><th>Difference</th>' +
+      '</tr></thead><tbody>';
+
+    m.months.forEach(function (x) {
+      h += '<tr>' +
+        '<td>' + esc(monthLabel(x.rec.month)) + (x.open ? ' <em>(in progress)</em>' : '') + '</td>' +
+        '<td>' + esc(hm(x.stats.direct)) + '</td>' +
+        '<td>' + esc(hm(x.stats.required)) + '</td>' +
+        '<td>' + esc(hm(x.stats.provided)) + '</td>' +
+        '<td class="' + (x.stats.short ? 'sr-short' : 'sr-met') + '">' +
+          (x.stats.short ? '− ' + esc(hm(x.stats.short)) : 'Met') + '</td>' +
+        '</tr>';
+    });
+
+    h += '<tr class="sr-total"><td>Total</td>' +
+      '<td>' + esc(hm(m.total.direct)) + '</td>' +
+      '<td>' + esc(hm(m.total.required)) + '</td>' +
+      '<td>' + esc(hm(m.total.provided)) + '</td>' +
+      '<td class="' + (m.total.short ? 'sr-short' : 'sr-met') + '">' +
+        (m.total.short ? '− ' + esc(hm(m.total.short)) : 'Met') + '</td></tr>' +
+      '</tbody></table>' +
+      '<p class="sr-basis">Supervision required is calculated at one hour per ' + SUP_RATIO +
+      ' hours of direct therapy.</p>';
+
+    m.months.forEach(function (x) {
+      h += '<section class="sr-month"><h2>' + esc(monthLabel(x.rec.month)) + '</h2>';
+      if (!x.sessions.length) {
+        h += '<p class="sr-none">No supervision sessions recorded for this month.</p>';
+      } else {
+        h += '<table class="sr-log"><thead><tr>' +
+          '<th>Supervisor</th><th>Date of service</th><th>Type</th>' +
+          '<th>Start</th><th>End</th><th>Duration</th></tr></thead><tbody>';
+        x.sessions.forEach(function (s) {
+          h += '<tr><td>' + esc(s.supervisor || '—') + '</td>' +
+            '<td>' + esc(fmtDate(s.date)) + '</td>' +
+            '<td>' + esc(s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—')) + '</td>' +
+            '<td>' + esc(s.start ? fmtTime(s.start) : '—') + '</td>' +
+            '<td>' + esc(s.end ? fmtTime(s.end) : '—') + '</td>' +
+            '<td>' + esc(hm(sesMins(s))) + '</td></tr>';
+        });
+        h += '</tbody></table>';
+      }
+      if (x.rec.notes) h += '<p class="sr-notes"><strong>Notes.</strong> ' + esc(x.rec.notes) + '</p>';
+      h += '</section>';
+    });
+
+    h += '<section class="sr-sign">' +
+      '<p>I certify that the supervision recorded above was provided as described.</p>' +
+      '<div class="sr-sigrow">' +
+        '<span class="sr-sigline">Signature</span>' +
+        '<span class="sr-sigline sr-short-line">Printed name</span>' +
+        '<span class="sr-sigline sr-short-line">Date</span>' +
+      '</div></section>' +
+      '<footer class="sr-foot">Generated ' + esc(m.generated) + ' · ' + esc(AGENCY.dba) +
+      ' · Confidential — contains protected health information.</footer>' +
+      '</div>';
+    return h;
+  }
+
+  /* ---- the same document, drawn as vector text ---- */
+
+  function supReportPdf(m) {
+    var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
+    var W = 612, H = 792, ML = 54, MR = 54;
+    var right = W - MR;
+    var y = 0;
+    var page = 1;
+
+    function footer() {
+      doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(130);
+      doc.text('Generated ' + m.generated + ' · ' + AGENCY.dba +
+               ' · Confidential — contains protected health information.', ML, H - 34);
+      doc.text('Page ' + page, right, H - 34, { align: 'right' });
+      doc.setTextColor(0);
+    }
+
+    function newPage() {
+      footer();
+      doc.addPage();
+      page++;
+      y = 54;
+    }
+
+    // Reserve room so a heading never lands alone at the foot of a page.
+    function need(pts) {
+      if (y + pts > H - 58) newPage();
+    }
+
+    function header() {
+      y = 54;
+      doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(31, 46, 26);
+      doc.text(AGENCY.dba, ML, y);
+      doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(107, 117, 97);
+      doc.text(AGENCY.legal + ' (DBA ' + AGENCY.dba + ')', ML, y + 14);
+      doc.text(AGENCY.address, ML, y + 25);
+      doc.text(AGENCY.phone, ML, y + 36);
+      doc.setDrawColor(42, 166, 58).setLineWidth(2);
+      doc.line(ML, y + 46, right, y + 46);
+      doc.setTextColor(0);
+      y += 72;
+    }
+
+    function title() {
+      doc.setFont('helvetica', 'bold').setFontSize(19).setTextColor(31, 46, 26);
+      doc.text('Clinical Supervision Report', ML, y);
+      y += 20;
+      doc.setFont('helvetica', 'normal').setFontSize(10.5).setTextColor(107, 117, 97);
+      doc.text(m.from ? (m.from + (m.to && m.to !== m.from ? ' – ' + m.to : '')) : 'No months recorded', ML, y);
+      doc.setTextColor(0);
+      y += 24;
+    }
+
+    function metaBlock() {
+      var p = m.person || {};
+      var pairs = [
+        ['Client', m.client],
+        ['Date of birth', p.dob ? fmtDate(p.dob) : '—'],
+        ['Client / MA ID', p.clientId || '—'],
+        ['Payer', p.payer || '—'],
+        ['Primary BCBA / QSP', m.qsp || '—'],
+        ['Primary service location', m.location || '—']
+      ];
+      doc.setFontSize(9.5);
+      pairs.forEach(function (kv) {
+        need(16);
+        doc.setFont('helvetica', 'bold').setTextColor(107, 117, 97);
+        doc.text(kv[0], ML, y);
+        doc.setFont('helvetica', 'normal').setTextColor(0);
+        doc.text(String(kv[1]), ML + 150, y);
+        y += 15;
+      });
+      y += 10;
+    }
+
+    // One table renderer, so the summary and every log look the same.
+    function table(cols, rows, opts) {
+      opts = opts || {};
+      var pad = 5;
+      function head() {
+        need(24);
+        doc.setFillColor(246, 241, 226);
+        doc.rect(ML, y - 11, right - ML, 18, 'F');
+        doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(74, 85, 69);
+        cols.forEach(function (c) {
+          doc.text(c.label, c.align === 'right' ? c.x + c.w - pad : c.x + pad, y + 1,
+                   c.align === 'right' ? { align: 'right' } : undefined);
+        });
+        doc.setTextColor(0);
+        y += 18;
+      }
+      head();
+      doc.setFont('helvetica', 'normal').setFontSize(9);
+      rows.forEach(function (r) {
+        if (y + 16 > H - 58) { newPage(); head(); doc.setFont('helvetica', 'normal').setFontSize(9); }
+        if (r._total) doc.setFont('helvetica', 'bold');
+        cols.forEach(function (c) {
+          var v = String(r[c.key] == null ? '' : r[c.key]);
+          if (c.key === 'diff') {
+            if (r._short) doc.setTextColor(180, 40, 40);
+            else doc.setTextColor(31, 138, 46);
+          }
+          doc.text(v, c.align === 'right' ? c.x + c.w - pad : c.x + pad, y + 2,
+                   c.align === 'right' ? { align: 'right' } : undefined);
+          doc.setTextColor(0);
+        });
+        doc.setFont('helvetica', 'normal');
+        doc.setDrawColor(230, 224, 204).setLineWidth(0.5);
+        doc.line(ML, y + 6, right, y + 6);
+        y += 16;
+      });
+      y += opts.gap == null ? 16 : opts.gap;
+    }
+
+    function widths(spec) {
+      var total = right - ML, x = ML, out = [];
+      spec.forEach(function (c) {
+        var w = Math.round(total * c.frac);
+        out.push({ label: c.label, key: c.key, x: x, w: w, align: c.align });
+        x += w;
+      });
+      return out;
+    }
+
+    header();
+    title();
+    metaBlock();
+
+    need(30);
+    doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(31, 46, 26);
+    doc.text('Summary by month', ML, y);
+    doc.setTextColor(0);
+    y += 14;
+
+    var sumCols = widths([
+      { label: 'Month', key: 'month', frac: 0.26 },
+      { label: 'Direct therapy', key: 'direct', frac: 0.19, align: 'right' },
+      { label: 'Required', key: 'required', frac: 0.18, align: 'right' },
+      { label: 'Provided', key: 'provided', frac: 0.18, align: 'right' },
+      { label: 'Difference', key: 'diff', frac: 0.19, align: 'right' }
+    ]);
+    var sumRows = m.months.map(function (x) {
+      return {
+        month: monthLabel(x.rec.month) + (x.open ? ' (in progress)' : ''),
+        direct: hm(x.stats.direct), required: hm(x.stats.required),
+        provided: hm(x.stats.provided),
+        diff: x.stats.short ? '− ' + hm(x.stats.short) : 'Met',
+        _short: x.stats.short > 0
+      };
+    });
+    sumRows.push({
+      month: 'Total', direct: hm(m.total.direct), required: hm(m.total.required),
+      provided: hm(m.total.provided),
+      diff: m.total.short ? '− ' + hm(m.total.short) : 'Met',
+      _short: m.total.short > 0, _total: true
+    });
+    table(sumCols, sumRows, { gap: 8 });
+
+    doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(107, 117, 97);
+    doc.text('Supervision required is calculated at one hour per ' + SUP_RATIO +
+             ' hours of direct therapy.', ML, y);
+    doc.setTextColor(0);
+    y += 22;
+
+    var logCols = widths([
+      { label: 'Supervisor', key: 'sup', frac: 0.24 },
+      { label: 'Date of service', key: 'date', frac: 0.22 },
+      { label: 'Type', key: 'code', frac: 0.14 },
+      { label: 'Start', key: 'start', frac: 0.13, align: 'right' },
+      { label: 'End', key: 'end', frac: 0.13, align: 'right' },
+      { label: 'Duration', key: 'dur', frac: 0.14, align: 'right' }
+    ]);
+
+    m.months.forEach(function (x) {
+      need(46);
+      doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(31, 46, 26);
+      doc.text(monthLabel(x.rec.month), ML, y);
+      doc.setTextColor(0);
+      y += 14;
+      if (!x.sessions.length) {
+        doc.setFont('helvetica', 'italic').setFontSize(9).setTextColor(107, 117, 97);
+        doc.text('No supervision sessions recorded for this month.', ML, y);
+        doc.setTextColor(0);
+        y += 22;
+        return;
+      }
+      table(logCols, x.sessions.map(function (s) {
+        return {
+          sup: s.supervisor || '—',
+          date: fmtDate(s.date),
+          code: s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—'),
+          start: s.start ? fmtTime(s.start) : '—',
+          end: s.end ? fmtTime(s.end) : '—',
+          dur: hm(sesMins(s))
+        };
+      }));
+      if (x.rec.notes) {
+        need(30);
+        doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(74, 85, 69);
+        doc.text(doc.splitTextToSize('Notes. ' + x.rec.notes, right - ML), ML, y);
+        doc.setTextColor(0);
+        y += 20;
+      }
+    });
+
+    need(76);
+    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0);
+    doc.text('I certify that the supervision recorded above was provided as described.', ML, y);
+    y += 34;
+    var segs = [
+      { label: 'Signature', frac: 0.44 },
+      { label: 'Printed name', frac: 0.30 },
+      { label: 'Date', frac: 0.26 }
+    ];
+    var x0 = ML, span = right - ML;
+    segs.forEach(function (sg, i) {
+      var w = Math.round(span * sg.frac) - (i < segs.length - 1 ? 14 : 0);
+      doc.setDrawColor(120).setLineWidth(0.7);
+      doc.line(x0, y, x0 + w, y);
+      doc.setFontSize(7.5).setTextColor(107, 117, 97);
+      doc.text(sg.label, x0, y + 11);
+      x0 += w + 14;
+    });
+    doc.setTextColor(0);
+
+    footer();
+    return doc;
+  }
+
+  function supReportFileName(m) {
+    var who = String(m.client || 'client').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return 'Supervision-Report-' + who + '.pdf';
+  }
+
+  function openSupReport(clientName) {
+    var m = supReportModel(clientName);
+    if (!m.months.length) {
+      flash('No supervision months recorded for ' + clientName + ' yet.', true);
+      return;
+    }
+
+    var back = document.createElement('div');
+    back.className = 'sr-back';
+    back.innerHTML =
+      '<div class="sr-bar no-print">' +
+        '<strong>Supervision report — ' + esc(clientName) + '</strong>' +
+        '<span class="sr-spacer"></span>' +
+        '<button type="button" class="tk-btn" data-sr-close="1">Close</button>' +
+        '<button type="button" class="tk-btn" data-sr-pdf="1">Download PDF</button>' +
+        '<button type="button" class="tk-btn tk-primary" data-sr-print="1">Print / Save as PDF</button>' +
+      '</div>' +
+      '<div class="sr-page">' + supReportHTML(m) + '</div>';
+    document.body.appendChild(back);
+    document.body.classList.add('sr-open');
+
+    function close() {
+      back.remove();
+      document.body.classList.remove('sr-open');
+      document.removeEventListener('keydown', onKey);
+    }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+
+    back.addEventListener('click', function (e) {
+      if (e.target.closest('[data-sr-close]')) { close(); return; }
+      if (e.target.closest('[data-sr-print]')) { window.print(); return; }
+      var dl = e.target.closest('[data-sr-pdf]');
+      if (dl) {
+        dl.disabled = true;
+        var label = dl.textContent;
+        dl.textContent = 'Building…';
+        loadJsPdf().then(function () {
+          supReportPdf(m).save(supReportFileName(m));
+          flash('PDF downloaded.');
+        }).catch(function (err) {
+          flash(err.message || 'Could not build the PDF — use Print instead.', true);
+        }).then(function () {
+          dl.disabled = false;
+          dl.textContent = label;
+        });
+      }
+    });
   }
 
   /* ------------------------------------------------------------ checklists */
@@ -2977,6 +3478,10 @@
         openTrainingEditor(p[0], p[1]);
         return;
       }
+      if ((el = e.target.closest('[data-supreport]'))) {
+        openSupReport(supName(el.dataset.supreport));
+        return;
+      }
       if ((el = e.target.closest('[data-supmerge]'))) {
         var mp = el.dataset.supmerge.split('|');
         var mFrom = supName(mp[0]), mTo = supName(mp[1]);
@@ -3055,7 +3560,6 @@
       }
       if ((el = e.target.closest('[data-supadd]'))) { openSupEditor('', el.dataset.supadd || ''); return; }
       if ((el = e.target.closest('[data-supedit]'))) { openSupEditor(el.dataset.supedit); return; }
-      if ((el = e.target.closest('[data-supprint]'))) { window.print(); return; }
       if ((el = e.target.closest('[data-sesadd]'))) { openSessionEditor(el.dataset.sesadd, ''); return; }
       if ((el = e.target.closest('[data-suppaste]'))) { openSupPaste(el.dataset.suppaste || ''); return; }
       if ((el = e.target.closest('[data-sesedit]'))) {
