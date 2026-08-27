@@ -2435,42 +2435,37 @@
   /* ------------------------------------------------- DHS supervision report
    *
    * DHS asks for evidence that a client received the supervision their direct
-   * hours required. This produces that as a document: agency identity, the
-   * client, and every month with its required-vs-provided figures and the
-   * session log behind them.
+   * hours required. The document itself is staff-portal/supervision-report.html
+   * — a page of its own, like every other form in the portal, so it uses the
+   * same form-styles.css and the same <doc-page> shell rather than a second
+   * copy of the design. (Loading form-styles.css into the tracker is not an
+   * option: it defines --ink, --line and friends on :root and would repaint the
+   * whole portal.)
    *
-   * Two ways out, and they are not the same thing. "Print / Save as PDF" goes
-   * through the browser, which writes real vector text — searchable, and
-   * legible at any zoom. "Download PDF" builds the same document with jsPDF,
-   * for when a file is wanted without walking through a print dialog. Neither
-   * rasterises the page, because a screenshot of a table is a poor thing to
-   * hand a regulator.
+   * This side computes. The page renders. Every figure is formatted here, so
+   * the printed document and the tracker can never disagree about an arithmetic
+   * result — there is only one implementation of it.
    */
   var AGENCY = {
     legal: 'Bright Minds Therapy, L.L.C.',
     dba: 'Noor Therapy Center',
-    address: '6250 Excelsior Blvd, Suite 102, St. Louis Park, MN 55416',
-    phone: '612-482-3186'
+    street: '6250 Excelsior Blvd, Suite 102',
+    cityline: 'St. Louis Park, MN 55416',
+    phone: '(612) 703-9022',
+    fax: '(612) 482-3186',
+    email: 'info@noortherapycenter.com'
   };
 
-  var JSPDF_SRC = 'https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';
+  // The client's name travels through localStorage, not the URL: a name in a
+  // query string ends up in browser history and in anything the URL is later
+  // pasted into. The report page reads this once and clears it.
+  var LS_SUPREPORT = 'noor-supreport';
 
-  function loadJsPdf() {
-    if (window.jspdf && window.jspdf.jsPDF) return Promise.resolve();
-    return new Promise(function (res, rej) {
-      var existing = document.querySelector('script[data-jspdf]');
-      if (existing) { existing.addEventListener('load', res); existing.addEventListener('error', rej); return; }
-      var s = document.createElement('script');
-      s.src = JSPDF_SRC;
-      s.setAttribute('data-jspdf', '1');
-      s.onload = res;
-      s.onerror = function () { rej(new Error('Could not load the PDF library — check the connection.')); };
-      document.head.appendChild(s);
-    });
+  function supReportFileName(clientName) {
+    var who = String(clientName || 'client').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    return 'Supervision-Report-' + who + '.pdf';
   }
 
-  // Everything the document needs, gathered once so the HTML and the PDF
-  // cannot drift apart.
   function supReportModel(clientName) {
     var rows = Store.all('clientsup')
       .filter(function (r) { return r.client === clientName; })
@@ -2483,362 +2478,70 @@
       var st = supStats(r);
       var sessions = (r.sessions || []).slice().sort(function (a, b) {
         return String(a.date).localeCompare(String(b.date)) ||
-               String(a.start).localeCompare(String(b.start));
+               String(a.start || '').localeCompare(String(b.start || ''));
+      }).map(function (s) {
+        return {
+          supervisor: s.supervisor || '',
+          dateText: fmtDate(s.date),
+          codeText: s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—'),
+          startText: s.start ? fmtTime(s.start) : '—',
+          endText: s.end ? fmtTime(s.end) : '—',
+          durText: hm(sesMins(s))
+        };
       });
-      return { rec: r, stats: st, sessions: sessions, open: supOpen(r) };
+      return {
+        month: r.month,
+        monthLabel: monthLabel(r.month),
+        open: supOpen(r),
+        directText: hm(st.direct),
+        requiredText: hm(st.required),
+        providedText: hm(st.provided),
+        short: st.short,
+        shortText: hm(st.short),
+        notes: r.notes || '',
+        sessions: sessions
+      };
     });
 
-    var total = months.reduce(function (t, m) {
-      t.direct += m.stats.direct;
-      t.required += m.stats.required;
-      t.provided += m.stats.provided;
-      t.sessions += m.sessions.length;
-      return t;
-    }, { direct: 0, required: 0, provided: 0, sessions: 0 });
-    total.short = Math.max(0, total.required - total.provided);
+    var t = rows.reduce(function (acc, r) {
+      var st = supStats(r);
+      acc.direct += st.direct; acc.required += st.required; acc.provided += st.provided;
+      return acc;
+    }, { direct: 0, required: 0, provided: 0 });
+    var totalShort = Math.max(0, t.required - t.provided);
 
-    // The QSP named on the most recent month is the one to put on the cover.
+    // The QSP and location named on the most recent month go on the cover.
     var qsp = '', location = '';
-    months.forEach(function (m) {
-      if (m.rec.qsp) qsp = m.rec.qsp;
-      if (m.rec.location) {
-        location = m.rec.location === 'Other' && m.rec.locationOther
-          ? m.rec.locationOther : m.rec.location;
+    rows.forEach(function (r) {
+      if (r.qsp) qsp = r.qsp;
+      if (r.location) {
+        location = r.location === 'Other' && r.locationOther ? r.locationOther : r.location;
       }
     });
 
     return {
-      client: clientName, person: person, months: months, total: total,
-      qsp: qsp, location: location,
-      from: months.length ? monthLabel(months[0].rec.month) : '',
-      to: months.length ? monthLabel(months[months.length - 1].rec.month) : '',
+      client: clientName,
+      person: person ? {
+        clientId: person.clientId || '',
+        payer: person.payer || '',
+        dobText: person.dob ? fmtDate(person.dob) : ''
+      } : {},
+      qsp: qsp,
+      location: location,
+      ratio: SUP_RATIO,
+      months: months,
+      total: {
+        directText: hm(t.direct), requiredText: hm(t.required),
+        providedText: hm(t.provided), short: totalShort, shortText: hm(totalShort)
+      },
+      from: months.length ? months[0].monthLabel : '',
+      to: months.length ? months[months.length - 1].monthLabel : '',
       generated: new Date().toLocaleDateString('en-US', {
         month: 'long', day: 'numeric', year: 'numeric'
-      })
+      }),
+      fileName: supReportFileName(clientName),
+      agency: AGENCY
     };
-  }
-
-  function supReportHTML(m) {
-    var p = m.person || {};
-    function row(k, v) {
-      return '<tr><th>' + esc(k) + '</th><td>' + esc(v || '—') + '</td></tr>';
-    }
-
-    var h = '<div class="sr-doc">' +
-      '<header class="sr-head">' +
-        '<img class="sr-logo" src="noor-mark.png" alt=""/>' +
-        '<div class="sr-org"><strong>' + esc(AGENCY.dba) + '</strong>' +
-          '<span>' + esc(AGENCY.legal) + ' (DBA ' + esc(AGENCY.dba) + ')</span>' +
-          '<span>' + esc(AGENCY.address) + '</span>' +
-          '<span>' + esc(AGENCY.phone) + '</span></div>' +
-      '</header>' +
-      '<h1 class="sr-title">Clinical Supervision Report</h1>' +
-      '<p class="sr-period">' +
-        (m.from ? esc(m.from) + (m.to && m.to !== m.from ? ' – ' + esc(m.to) : '') : 'No months recorded') +
-      '</p>' +
-
-      '<table class="sr-meta"><tbody>' +
-        row('Client', m.client) +
-        row('Date of birth', p.dob ? fmtDate(p.dob) : '') +
-        row('Client / MA ID', p.clientId) +
-        row('Payer', p.payer) +
-        row('Primary BCBA / QSP', m.qsp) +
-        row('Primary service location', m.location) +
-      '</tbody></table>' +
-
-      '<table class="sr-summary"><thead><tr>' +
-        '<th>Month</th><th>Direct therapy</th><th>Supervision required</th>' +
-        '<th>Supervision provided</th><th>Difference</th>' +
-      '</tr></thead><tbody>';
-
-    m.months.forEach(function (x) {
-      h += '<tr>' +
-        '<td>' + esc(monthLabel(x.rec.month)) + (x.open ? ' <em>(in progress)</em>' : '') + '</td>' +
-        '<td>' + esc(hm(x.stats.direct)) + '</td>' +
-        '<td>' + esc(hm(x.stats.required)) + '</td>' +
-        '<td>' + esc(hm(x.stats.provided)) + '</td>' +
-        '<td class="' + (x.stats.short ? 'sr-short' : 'sr-met') + '">' +
-          (x.stats.short ? '− ' + esc(hm(x.stats.short)) : 'Met') + '</td>' +
-        '</tr>';
-    });
-
-    h += '<tr class="sr-total"><td>Total</td>' +
-      '<td>' + esc(hm(m.total.direct)) + '</td>' +
-      '<td>' + esc(hm(m.total.required)) + '</td>' +
-      '<td>' + esc(hm(m.total.provided)) + '</td>' +
-      '<td class="' + (m.total.short ? 'sr-short' : 'sr-met') + '">' +
-        (m.total.short ? '− ' + esc(hm(m.total.short)) : 'Met') + '</td></tr>' +
-      '</tbody></table>' +
-      '<p class="sr-basis">Supervision required is calculated at one hour per ' + SUP_RATIO +
-      ' hours of direct therapy.</p>';
-
-    m.months.forEach(function (x) {
-      h += '<section class="sr-month"><h2>' + esc(monthLabel(x.rec.month)) + '</h2>';
-      if (!x.sessions.length) {
-        h += '<p class="sr-none">No supervision sessions recorded for this month.</p>';
-      } else {
-        h += '<table class="sr-log"><thead><tr>' +
-          '<th>Supervisor</th><th>Date of service</th><th>Type</th>' +
-          '<th>Start</th><th>End</th><th>Duration</th></tr></thead><tbody>';
-        x.sessions.forEach(function (s) {
-          h += '<tr><td>' + esc(s.supervisor || '—') + '</td>' +
-            '<td>' + esc(fmtDate(s.date)) + '</td>' +
-            '<td>' + esc(s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—')) + '</td>' +
-            '<td>' + esc(s.start ? fmtTime(s.start) : '—') + '</td>' +
-            '<td>' + esc(s.end ? fmtTime(s.end) : '—') + '</td>' +
-            '<td>' + esc(hm(sesMins(s))) + '</td></tr>';
-        });
-        h += '</tbody></table>';
-      }
-      if (x.rec.notes) h += '<p class="sr-notes"><strong>Notes.</strong> ' + esc(x.rec.notes) + '</p>';
-      h += '</section>';
-    });
-
-    h += '<section class="sr-sign">' +
-      '<p>I certify that the supervision recorded above was provided as described.</p>' +
-      '<div class="sr-sigrow">' +
-        '<span class="sr-sigline">Signature</span>' +
-        '<span class="sr-sigline sr-short-line">Printed name</span>' +
-        '<span class="sr-sigline sr-short-line">Date</span>' +
-      '</div></section>' +
-      '<footer class="sr-foot">Generated ' + esc(m.generated) + ' · ' + esc(AGENCY.dba) +
-      ' · Confidential — contains protected health information.</footer>' +
-      '</div>';
-    return h;
-  }
-
-  /* ---- the same document, drawn as vector text ---- */
-
-  function supReportPdf(m) {
-    var doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
-    var W = 612, H = 792, ML = 54, MR = 54;
-    var right = W - MR;
-    var y = 0;
-    var page = 1;
-
-    function footer() {
-      doc.setFont('helvetica', 'normal').setFontSize(7.5).setTextColor(130);
-      doc.text('Generated ' + m.generated + ' · ' + AGENCY.dba +
-               ' · Confidential — contains protected health information.', ML, H - 34);
-      doc.text('Page ' + page, right, H - 34, { align: 'right' });
-      doc.setTextColor(0);
-    }
-
-    function newPage() {
-      footer();
-      doc.addPage();
-      page++;
-      y = 54;
-    }
-
-    // Reserve room so a heading never lands alone at the foot of a page.
-    function need(pts) {
-      if (y + pts > H - 58) newPage();
-    }
-
-    function header() {
-      y = 54;
-      doc.setFont('helvetica', 'bold').setFontSize(15).setTextColor(31, 46, 26);
-      doc.text(AGENCY.dba, ML, y);
-      doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(107, 117, 97);
-      doc.text(AGENCY.legal + ' (DBA ' + AGENCY.dba + ')', ML, y + 14);
-      doc.text(AGENCY.address, ML, y + 25);
-      doc.text(AGENCY.phone, ML, y + 36);
-      doc.setDrawColor(42, 166, 58).setLineWidth(2);
-      doc.line(ML, y + 46, right, y + 46);
-      doc.setTextColor(0);
-      y += 72;
-    }
-
-    function title() {
-      doc.setFont('helvetica', 'bold').setFontSize(19).setTextColor(31, 46, 26);
-      doc.text('Clinical Supervision Report', ML, y);
-      y += 20;
-      doc.setFont('helvetica', 'normal').setFontSize(10.5).setTextColor(107, 117, 97);
-      doc.text(m.from ? (m.from + (m.to && m.to !== m.from ? ' – ' + m.to : '')) : 'No months recorded', ML, y);
-      doc.setTextColor(0);
-      y += 24;
-    }
-
-    function metaBlock() {
-      var p = m.person || {};
-      var pairs = [
-        ['Client', m.client],
-        ['Date of birth', p.dob ? fmtDate(p.dob) : '—'],
-        ['Client / MA ID', p.clientId || '—'],
-        ['Payer', p.payer || '—'],
-        ['Primary BCBA / QSP', m.qsp || '—'],
-        ['Primary service location', m.location || '—']
-      ];
-      doc.setFontSize(9.5);
-      pairs.forEach(function (kv) {
-        need(16);
-        doc.setFont('helvetica', 'bold').setTextColor(107, 117, 97);
-        doc.text(kv[0], ML, y);
-        doc.setFont('helvetica', 'normal').setTextColor(0);
-        doc.text(String(kv[1]), ML + 150, y);
-        y += 15;
-      });
-      y += 10;
-    }
-
-    // One table renderer, so the summary and every log look the same.
-    function table(cols, rows, opts) {
-      opts = opts || {};
-      var pad = 5;
-      function head() {
-        need(24);
-        doc.setFillColor(246, 241, 226);
-        doc.rect(ML, y - 11, right - ML, 18, 'F');
-        doc.setFont('helvetica', 'bold').setFontSize(8).setTextColor(74, 85, 69);
-        cols.forEach(function (c) {
-          doc.text(c.label, c.align === 'right' ? c.x + c.w - pad : c.x + pad, y + 1,
-                   c.align === 'right' ? { align: 'right' } : undefined);
-        });
-        doc.setTextColor(0);
-        y += 18;
-      }
-      head();
-      doc.setFont('helvetica', 'normal').setFontSize(9);
-      rows.forEach(function (r) {
-        if (y + 16 > H - 58) { newPage(); head(); doc.setFont('helvetica', 'normal').setFontSize(9); }
-        if (r._total) doc.setFont('helvetica', 'bold');
-        cols.forEach(function (c) {
-          var v = String(r[c.key] == null ? '' : r[c.key]);
-          if (c.key === 'diff') {
-            if (r._short) doc.setTextColor(180, 40, 40);
-            else doc.setTextColor(31, 138, 46);
-          }
-          doc.text(v, c.align === 'right' ? c.x + c.w - pad : c.x + pad, y + 2,
-                   c.align === 'right' ? { align: 'right' } : undefined);
-          doc.setTextColor(0);
-        });
-        doc.setFont('helvetica', 'normal');
-        doc.setDrawColor(230, 224, 204).setLineWidth(0.5);
-        doc.line(ML, y + 6, right, y + 6);
-        y += 16;
-      });
-      y += opts.gap == null ? 16 : opts.gap;
-    }
-
-    function widths(spec) {
-      var total = right - ML, x = ML, out = [];
-      spec.forEach(function (c) {
-        var w = Math.round(total * c.frac);
-        out.push({ label: c.label, key: c.key, x: x, w: w, align: c.align });
-        x += w;
-      });
-      return out;
-    }
-
-    header();
-    title();
-    metaBlock();
-
-    need(30);
-    doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(31, 46, 26);
-    doc.text('Summary by month', ML, y);
-    doc.setTextColor(0);
-    y += 14;
-
-    var sumCols = widths([
-      { label: 'Month', key: 'month', frac: 0.26 },
-      { label: 'Direct therapy', key: 'direct', frac: 0.19, align: 'right' },
-      { label: 'Required', key: 'required', frac: 0.18, align: 'right' },
-      { label: 'Provided', key: 'provided', frac: 0.18, align: 'right' },
-      { label: 'Difference', key: 'diff', frac: 0.19, align: 'right' }
-    ]);
-    var sumRows = m.months.map(function (x) {
-      return {
-        month: monthLabel(x.rec.month) + (x.open ? ' (in progress)' : ''),
-        direct: hm(x.stats.direct), required: hm(x.stats.required),
-        provided: hm(x.stats.provided),
-        diff: x.stats.short ? '− ' + hm(x.stats.short) : 'Met',
-        _short: x.stats.short > 0
-      };
-    });
-    sumRows.push({
-      month: 'Total', direct: hm(m.total.direct), required: hm(m.total.required),
-      provided: hm(m.total.provided),
-      diff: m.total.short ? '− ' + hm(m.total.short) : 'Met',
-      _short: m.total.short > 0, _total: true
-    });
-    table(sumCols, sumRows, { gap: 8 });
-
-    doc.setFont('helvetica', 'italic').setFontSize(8).setTextColor(107, 117, 97);
-    doc.text('Supervision required is calculated at one hour per ' + SUP_RATIO +
-             ' hours of direct therapy.', ML, y);
-    doc.setTextColor(0);
-    y += 22;
-
-    var logCols = widths([
-      { label: 'Supervisor', key: 'sup', frac: 0.24 },
-      { label: 'Date of service', key: 'date', frac: 0.22 },
-      { label: 'Type', key: 'code', frac: 0.14 },
-      { label: 'Start', key: 'start', frac: 0.13, align: 'right' },
-      { label: 'End', key: 'end', frac: 0.13, align: 'right' },
-      { label: 'Duration', key: 'dur', frac: 0.14, align: 'right' }
-    ]);
-
-    m.months.forEach(function (x) {
-      need(46);
-      doc.setFont('helvetica', 'bold').setFontSize(11).setTextColor(31, 46, 26);
-      doc.text(monthLabel(x.rec.month), ML, y);
-      doc.setTextColor(0);
-      y += 14;
-      if (!x.sessions.length) {
-        doc.setFont('helvetica', 'italic').setFontSize(9).setTextColor(107, 117, 97);
-        doc.text('No supervision sessions recorded for this month.', ML, y);
-        doc.setTextColor(0);
-        y += 22;
-        return;
-      }
-      table(logCols, x.sessions.map(function (s) {
-        return {
-          sup: s.supervisor || '—',
-          date: fmtDate(s.date),
-          code: s.code === 'Other' && s.codeOther ? s.codeOther : (s.code || '—'),
-          start: s.start ? fmtTime(s.start) : '—',
-          end: s.end ? fmtTime(s.end) : '—',
-          dur: hm(sesMins(s))
-        };
-      }));
-      if (x.rec.notes) {
-        need(30);
-        doc.setFont('helvetica', 'normal').setFontSize(8.5).setTextColor(74, 85, 69);
-        doc.text(doc.splitTextToSize('Notes. ' + x.rec.notes, right - ML), ML, y);
-        doc.setTextColor(0);
-        y += 20;
-      }
-    });
-
-    need(76);
-    doc.setFont('helvetica', 'normal').setFontSize(9).setTextColor(0);
-    doc.text('I certify that the supervision recorded above was provided as described.', ML, y);
-    y += 34;
-    var segs = [
-      { label: 'Signature', frac: 0.44 },
-      { label: 'Printed name', frac: 0.30 },
-      { label: 'Date', frac: 0.26 }
-    ];
-    var x0 = ML, span = right - ML;
-    segs.forEach(function (sg, i) {
-      var w = Math.round(span * sg.frac) - (i < segs.length - 1 ? 14 : 0);
-      doc.setDrawColor(120).setLineWidth(0.7);
-      doc.line(x0, y, x0 + w, y);
-      doc.setFontSize(7.5).setTextColor(107, 117, 97);
-      doc.text(sg.label, x0, y + 11);
-      x0 += w + 14;
-    });
-    doc.setTextColor(0);
-
-    footer();
-    return doc;
-  }
-
-  function supReportFileName(m) {
-    var who = String(m.client || 'client').replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-    return 'Supervision-Report-' + who + '.pdf';
   }
 
   function openSupReport(clientName) {
@@ -2847,48 +2550,19 @@
       flash('No supervision months recorded for ' + clientName + ' yet.', true);
       return;
     }
-
-    var back = document.createElement('div');
-    back.className = 'sr-back';
-    back.innerHTML =
-      '<div class="sr-bar no-print">' +
-        '<strong>Supervision report — ' + esc(clientName) + '</strong>' +
-        '<span class="sr-spacer"></span>' +
-        '<button type="button" class="tk-btn" data-sr-close="1">Close</button>' +
-        '<button type="button" class="tk-btn" data-sr-pdf="1">Download PDF</button>' +
-        '<button type="button" class="tk-btn tk-primary" data-sr-print="1">Print / Save as PDF</button>' +
-      '</div>' +
-      '<div class="sr-page">' + supReportHTML(m) + '</div>';
-    document.body.appendChild(back);
-    document.body.classList.add('sr-open');
-
-    function close() {
-      back.remove();
-      document.body.classList.remove('sr-open');
-      document.removeEventListener('keydown', onKey);
+    try {
+      localStorage.setItem(LS_SUPREPORT, JSON.stringify(m));
+    } catch (e) {
+      flash('Could not prepare the report — browser storage may be full.', true);
+      return;
     }
-    function onKey(e) { if (e.key === 'Escape') close(); }
-    document.addEventListener('keydown', onKey);
-
-    back.addEventListener('click', function (e) {
-      if (e.target.closest('[data-sr-close]')) { close(); return; }
-      if (e.target.closest('[data-sr-print]')) { window.print(); return; }
-      var dl = e.target.closest('[data-sr-pdf]');
-      if (dl) {
-        dl.disabled = true;
-        var label = dl.textContent;
-        dl.textContent = 'Building…';
-        loadJsPdf().then(function () {
-          supReportPdf(m).save(supReportFileName(m));
-          flash('PDF downloaded.');
-        }).catch(function (err) {
-          flash(err.message || 'Could not build the PDF — use Print instead.', true);
-        }).then(function () {
-          dl.disabled = false;
-          dl.textContent = label;
-        });
-      }
-    });
+    // A new tab, so the tracker stays where it was; the report is a thing you
+    // print and close.
+    var w = window.open('supervision-report.html', '_blank');
+    if (!w) {
+      // Pop-ups blocked: go there directly rather than failing silently.
+      location.href = 'supervision-report.html';
+    }
   }
 
   /* ------------------------------------------------------------ checklists */

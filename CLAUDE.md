@@ -168,12 +168,19 @@
   branch had not. Import dedupe keys include the length, code and supervisor for the same reason:
   `date|start|end` collapsed to `"2026-06-03||"` for every clock-less row on a day and silently
   discarded the rest as "already logged".
-- DHS supervision report (`openSupReport` / `supReportModel` / `supReportHTML` / `supReportPdf`).
-  Branded document per client covering every month: identity block, required-vs-provided summary,
-  the session log behind it, a certification line, and a confidentiality footer. `AGENCY` at the top
-  of that section holds the legal name, DBA, address and phone — correct it there, it is used by
-  both outputs.
-  - Two exits, both vector, neither a screenshot: "Print / Save as PDF" hides everything except the
-    report via `body.sr-open` print rules and lets the browser write the PDF, and "Download PDF"
-    redraws the same document with jsPDF (loaded lazily from CDN). html2canvas is deliberately NOT
-    used — a rasterised table is a poor thing to hand a regulator, and it would not be searchable.
+- DHS supervision report. The document is `staff-portal/supervision-report.html` — its OWN page, like
+  every other form in the portal, using `../Fillable Forms/form-styles.css` and the same `<doc-page>`
+  shell. It must stay a separate page: form-styles.css defines `--ink`, `--line`, `--green` etc. on
+  `:root`, so loading it inside the tracker would repaint the whole portal. Being a real form page
+  also means it prints exactly like the others and there is only one copy of the design system.
+  - `tracker.js` computes, the page renders. `supReportModel()` returns EVERY figure pre-formatted
+    (`requiredText`, `durText`, `dateText`…), so the printed document cannot disagree with the
+    tracker about an arithmetic result — there is one implementation of it.
+  - The client's name travels through `localStorage` (`noor-supreport`), NOT the URL: a name in a
+    query string lands in browser history and in anything the URL is later pasted into. The page
+    reads the key once and clears it, so a reload shows an empty state by design.
+  - `AGENCY` at the top of that section in tracker.js holds the identity block. The phone is
+    (612) 703-9022; (612) 482-3186 is the FAX — the forms have it right, do not swap them.
+  - Two exits, both vector: Print (browser writes the PDF, `<doc-page>` handles margins and running
+    footers) and Download PDF (jsPDF redraws the same document). html2canvas is deliberately NOT
+    used — a rasterised table is unsearchable and a poor thing to hand a regulator.
