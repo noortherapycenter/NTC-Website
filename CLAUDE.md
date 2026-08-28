@@ -184,3 +184,20 @@
   - Two exits, both vector: Print (browser writes the PDF, `<doc-page>` handles margins and running
     footers) and Download PDF (jsPDF redraws the same document). html2canvas is deliberately NOT
     used — a rasterised table is unsearchable and a poor thing to hand a regulator.
+- Drag to reorder (`staff-portal/reorder.js`, `window.NoorReorder`). Shared by the tracker's
+  checklists and the portal home cards. Delegated to a container that survives re-render — the
+  tracker rebuilds its whole panel on every save, so anything bound to a card would be discarded the
+  first time a checkbox was ticked. Load it BEFORE tracker.js: `renderChecklists` calls
+  `NoorReorder.grip()` while building its HTML.
+  - Two interaction models on purpose. A checklist card is full of checkboxes and text, so it only
+    moves from its grip, which flips `draggable` on just for the drag. A home card is an `<a>`,
+    already draggable, and a grip would mean a `<button>` inside an anchor — invalid and a click
+    hazard — so those drag from anywhere (`anywhere: true`).
+  - Keyboard works: arrows from a grip, Alt+Arrow on a gripless card. Drag-and-drop is unusable
+    without a pointer and "put the important one first" should not require one.
+  - Checklist order is an `order` field on the record, so it SYNCS — a shared module, one order for
+    everyone. It is only set once a list has been dragged; anything untouched still falls back to
+    alphabetical rather than jumping to the front. Home card order is per-browser localStorage
+    (`noor-portal-cards`) instead: which card matters most is a personal habit, and the cards are
+    static markup with nothing to hang a field on. Unknown ids are ignored and cards missing from a
+    saved order keep their markup position, so adding a card later does not strand it.

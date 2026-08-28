@@ -1152,9 +1152,7 @@
     }
 
     // ---- checklists, in full, because this is what gets checked daily ----
-    var lists = Store.all('checklists').sort(function (a, b) {
-      return String(a.name).localeCompare(String(b.name));
-    });
+    var lists = orderedChecklists();
     if (lists.length) {
       h += '<div class="tk-group"><h3>Checklists <span>' + lists.length + '</span></h3><div class="tk-lists">';
       lists.forEach(function (c) {
@@ -2580,10 +2578,32 @@
 
   /* ------------------------------------------------------------ checklists */
 
-  function renderChecklists() {
-    var lists = Store.all('checklists').sort(function (a, b) {
+  /* Checklists in the order somebody put them in.
+   *
+   * `order` is only set once a list has been dragged, so anything untouched
+   * keeps falling back to alphabetical rather than jumping to the front. The
+   * field lives on the record, and checklists are a shared module, so the
+   * order every member of staff sees is the same one. */
+  function orderedChecklists() {
+    return Store.all('checklists').sort(function (a, b) {
+      var ao = typeof a.order === 'number' ? a.order : Infinity;
+      var bo = typeof b.order === 'number' ? b.order : Infinity;
+      if (ao !== bo) return ao - bo;
       return String(a.name).localeCompare(String(b.name));
     });
+  }
+
+  // Stamp the given id order onto the records, saving only what moved.
+  function saveChecklistOrder(ids) {
+    ids.forEach(function (id, i) {
+      var c = Store.get('checklists', id);
+      if (!c || c.deletedAt || c.order === i) return;
+      Store.save('checklists', Object.assign({}, c, { order: i }));
+    });
+  }
+
+  function renderChecklists() {
+    var lists = orderedChecklists();
 
     var h = '<div class="tk-head">' +
       '<div><h2>My Checklists</h2><p class="tk-sub">Reusable lists for anything you work through step by step. ' +
@@ -2602,8 +2622,10 @@
       var done = items.filter(function (i) { return i.done; }).length;
       var pct = items.length ? Math.round((done / items.length) * 100) : 0;
 
-      h += '<section class="tk-list" data-list="' + esc(c.id) + '">' +
-        '<header><h3>' + esc(c.name || 'Untitled') + '</h3>' +
+      h += '<section class="tk-list" data-list="' + esc(c.id) + '" ' +
+        'data-nr="' + esc(c.id) + '" data-nr-group="checklists">' +
+        '<header>' + NoorReorder.grip(esc(c.name || 'Untitled')) +
+        '<h3>' + esc(c.name || 'Untitled') + '</h3>' +
         '<span class="tk-count">' + done + ' / ' + items.length + '</span>' +
         '<button type="button" class="tk-mini" data-listnote="' + esc(c.id) + '">Note</button>' +
         '<button type="button" class="tk-mini" data-reset="' + esc(c.id) + '">Reset</button>' +
@@ -3154,6 +3176,24 @@
   }
 
   function wire() {
+    /* Reordering is delegated to `root`, which outlives every re-render. A
+     * handler bound to a card would be discarded the first time a checkbox was
+     * ticked and the panel rebuilt. */
+    if (typeof NoorReorder !== 'undefined') {
+      NoorReorder.delegate(root, {
+        onReorder: function (group, ids, how) {
+          if (group !== 'checklists') return;
+          saveChecklistOrder(ids);
+          render();
+          if (how && how.keyboard) {
+            // Keep the moved grip focused so the arrows can be pressed again.
+            var again = root.querySelector('[data-nr="' + how.id + '"] [data-nr-grip]');
+            if (again) again.focus();
+          }
+        }
+      });
+    }
+
     root.addEventListener('click', function (e) {
       var el;
 

@@ -537,3 +537,32 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
 }
 .tk-filerow.tk-morerow .tk-due-main { flex: 0 0 auto; }
 .tk-filerow.tk-morerow:hover { color: var(--green-dark); border-color: var(--green); }
+
+/* ---- Drag to reorder -----------------------------------------------------
+   The grip is quiet until the card is hovered or it takes focus: reordering
+   is occasional, and six dots on every card all the time is clutter. */
+.nr-grip {
+  flex: none; width: 22px; height: 22px; padding: 0; margin-right: 2px;
+  border: none; background: none; cursor: grab; border-radius: 6px;
+  color: var(--muted); opacity: 0; transition: opacity .12s ease;
+  display: grid; place-items: center;
+}
+.nr-grip svg { width: 15px; height: 15px; fill: currentColor; }
+.tk-list:hover .nr-grip, .nr-grip:focus-visible { opacity: 1; }
+.nr-grip:hover { color: var(--ink); background: var(--surface-2); }
+.nr-grip:active { cursor: grabbing; }
+.nr-grip:focus-visible { outline: 2px solid var(--green); outline-offset: 1px; }
+
+.nr-dragging { opacity: .45; }
+
+/* Where it would land. A line rather than a gap, so nothing jumps around
+   under the pointer while you are aiming. */
+.nr-over-before, .nr-over-after { position: relative; }
+.nr-over-before::before, .nr-over-after::after {
+  content: ""; position: absolute; left: -5px; right: -5px; height: 3px;
+  background: var(--green); border-radius: 3px;
+}
+.nr-over-before::before { top: -6px; }
+.nr-over-after::after { bottom: -6px; }
+
+@media print { .nr-grip { display: none !important; } }

@@ -51,32 +51,35 @@
     </noscript></div>
   </div>
 
-  <div class="cards">
-    <a class="card" href="tracker.html">
+  <!-- Drag a card to put it where it belongs for how you actually work.
+       The order is per-browser (localStorage) rather than shared: which card
+       matters most is a personal habit, not an agency decision. -->
+  <div class="cards" id="portal-cards">
+    <a class="card" draggable="true" data-nr="tracker.html" data-nr-group="cards" href="tracker.html">
       <span class="dot" style="background:#e5396a"></span>
       <h3>Tracker</h3>
       <p>Authorization expirations, staff training, renewals, payroll and billing reminders, and checklists.</p>
       <span class="go">Open tracker &rarr;</span>
     </a>
-    <a class="card" href="forms.html">
+    <a class="card" draggable="true" data-nr="forms.html" data-nr-group="cards" href="forms.html">
       <span class="dot"></span>
       <h3>Forms</h3>
       <p>The full library of fillable and printable forms — client, HR, and daily operations.</p>
       <span class="go">Open forms &rarr;</span>
     </a>
-    <a class="card" href="policies.html">
+    <a class="card" draggable="true" data-nr="policies.html" data-nr-group="cards" href="policies.html">
       <span class="dot" style="background:#f18a2c"></span>
       <h3>Policies &amp; Procedures</h3>
       <p>Core agency policies: HIPAA, mandated reporting, incidents, emergencies, and more.</p>
       <span class="go">Open policies &rarr;</span>
     </a>
-    <a class="card" href="handbook.html">
+    <a class="card" draggable="true" data-nr="handbook.html" data-nr-group="cards" href="handbook.html">
       <span class="dot" style="background:#2f6fd6"></span>
       <h3>Employee Handbook</h3>
       <p>The complete handbook — read online, print, or download the PDF.</p>
       <span class="go">Open handbook &rarr;</span>
     </a>
-    <a class="card" href="onboarding.html">
+    <a class="card" draggable="true" data-nr="onboarding.html" data-nr-group="cards" href="onboarding.html">
       <span class="dot" style="background:#9b51c7"></span>
       <h3>Onboarding</h3>
       <p>Step-by-step packets for new clients and new staff at every provider level.</p>
@@ -113,6 +116,57 @@
   <span>Noor Therapy Center · Admin Portal · Internal use only</span>
 </footer>
 
+<script src="reorder.js"></script>
 <script src="tracker.js"></script>
+<script>
+/* Card order, remembered per browser.
+ *
+ * The cards are static markup, not data, so there is nothing to hang an order
+ * field on and nothing to sync — which suits it: "I want Onboarding first"
+ * is one person's habit, not something to impose on everyone. Unknown ids are
+ * ignored and anything missing from a saved order keeps its markup position,
+ * so adding a card later does not strand it. */
+(function () {
+  'use strict';
+  var KEY = 'noor-portal-cards';
+  var box = document.getElementById('portal-cards');
+  if (!box || !window.NoorReorder) return;
+
+  function saved() {
+    try {
+      var v = JSON.parse(localStorage.getItem(KEY) || '[]');
+      return Array.isArray(v) ? v : [];
+    } catch (e) { return []; }
+  }
+
+  function apply(order) {
+    if (!order.length) return;
+    var by = {};
+    var cards = box.querySelectorAll('[data-nr]');
+    for (var i = 0; i < cards.length; i++) by[cards[i].getAttribute('data-nr')] = cards[i];
+    order.forEach(function (id) { if (by[id]) box.appendChild(by[id]); });
+    // Anything the saved order never heard of stays after, in markup order.
+    for (var j = 0; j < cards.length; j++) {
+      if (order.indexOf(cards[j].getAttribute('data-nr')) < 0) box.appendChild(cards[j]);
+    }
+  }
+
+  apply(saved());
+
+  window.NoorReorder.delegate(box, {
+    anywhere: true,
+    horizontal: true,
+    onReorder: function (group, ids, how) {
+      if (group !== 'cards') return;
+      apply(ids);
+      try { localStorage.setItem(KEY, JSON.stringify(ids)); } catch (e) {}
+      if (how && how.keyboard) {
+        var again = box.querySelector('[data-nr="' + how.id + '"]');
+        if (again) again.focus();
+      }
+    }
+  });
+})();
+</script>
 </body>
 </html>

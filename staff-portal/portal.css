@@ -324,3 +324,18 @@ mark.find-hit.current { background: var(--orange); color: #fff; }
   html[data-theme="dark"] mark.find-hit.current { background: var(--orange); color: #241505; }
   html[data-theme="dark"] .pol-actions a, html[data-theme="dark"] .pol-actions button { background: #1d2316; color: var(--ink); }
 }
+
+/* ---- Reorderable home cards ----
+   No grip here: a card is an <a>, and a button inside an anchor is both
+   invalid and a click hazard, so the whole card is the handle. The cursor and
+   a hint on hover are what say so. */
+.cards .card[data-nr] { cursor: grab; }
+.cards .card[data-nr]:active { cursor: grabbing; }
+.cards .card.nr-dragging { opacity: .45; }
+.cards .card.nr-over-before, .cards .card.nr-over-after { position: relative; }
+.cards .card.nr-over-before::before, .cards .card.nr-over-after::after {
+  content: ""; position: absolute; top: -4px; bottom: -4px; width: 3px;
+  background: var(--green); border-radius: 3px;
+}
+.cards .card.nr-over-before::before { left: -7px; }
+.cards .card.nr-over-after::after { right: -7px; }
