@@ -528,3 +528,12 @@ body.tk-page .wrap.tk-wide { padding-left: 32px; padding-right: 32px; }
 /* The supervision report is its own page (supervision-report.html) so it can
    use the portal's form stylesheet without those :root tokens leaking in here.
    Nothing about it needs styling from the tracker. */
+
+/* The "+ N more" row at the foot of a dashboard glimpse. Reads as a way out
+   of the list rather than another entry in it. */
+.tk-filerow.tk-morerow {
+  justify-content: center; border-style: dashed;
+  font-size: 12.5px; font-weight: 700; color: var(--muted);
+}
+.tk-filerow.tk-morerow .tk-due-main { flex: 0 0 auto; }
+.tk-filerow.tk-morerow:hover { color: var(--green-dark); border-color: var(--green); }

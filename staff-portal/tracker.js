@@ -1126,17 +1126,28 @@
 
     h += group('Overdue', over) + group('Next 14 days', soon);
 
-    // ---- supervision months that closed under the requirement ----
+    /* ---- supervision months that closed under the requirement ----
+     * A glimpse, not the ledger. Every month that ever closed short stays
+     * short for good, so the full list only grows and would eventually push
+     * everything actionable off the front page. The three most recent are
+     * enough to say "this is still happening"; the rest live on the
+     * supervision tab, which is where you would go to work through them. */
+    var SUP_PEEK = 3;
     if (supShort.length) {
       h += '<div class="tk-group"><h3>Supervision shortfalls <span>' + supShort.length + '</span></h3>' +
         '<div class="tk-filelist">';
-      supShort.forEach(function (r) {
+      supShort.slice(0, SUP_PEEK).forEach(function (r) {
         var st = supStats(r);
         h += '<a class="tk-filerow" href="#' + esc(supHash(r)) + '" data-jump="' + esc(supHash(r)) + '">' +
           '<span class="tk-due-main"><strong>' + esc(r.client || 'Unnamed client') + '</strong>' +
           '<small>' + esc(monthLabel(r.month)) + ' closed ' + esc(hm(st.short)) + ' short</small></span>' +
-          '<span class="tk-badge tk-over">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
+          '<span class="tk-badge tk-none">' + esc(hm(st.provided)) + ' / ' + esc(hm(st.required)) + '</span></a>';
       });
+      if (supShort.length > SUP_PEEK) {
+        h += '<a class="tk-filerow tk-morerow" href="#clientsup" data-jump="clientsup">' +
+          '<span class="tk-due-main">+ ' + (supShort.length - SUP_PEEK) + ' more on the ' +
+          'supervision tab</span></a>';
+      }
       h += '</div></div>';
     }
 
