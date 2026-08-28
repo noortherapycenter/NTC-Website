@@ -1661,13 +1661,15 @@
 
     /* ---------------- every client, exactly once ---------------- */
     var people = supClients();
-    var short = supShortfalls().length;
     var h2 = head;
-    if (short) {
-      h2 += '<p class="tk-note tk-note-warn"><strong>' + short + ' closed month' +
-        (short === 1 ? '' : 's') + ' ended short of the supervision requirement.</strong> ' +
-        'Open the client to see which.</p>';
-    }
+
+    /* There was a banner here counting closed months that ended short and
+     * telling you to open a client to find out which. It appeared on every
+     * visit and said nothing the list below does not — each row already
+     * carries "N hrs short across M closed", against the client it belongs to.
+     * It also asked for something that cannot be done: a closed month is a
+     * record, not a task. That is the same reasoning that already removed the
+     * nav badge and the notification for these. */
 
     if (!people.length) {
       return h2 + '<div class="tk-empty"><strong>No clients yet.</strong> ' +
